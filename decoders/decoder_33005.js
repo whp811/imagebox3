@@ -1,5 +1,5 @@
 importScripts("https://cdn.jsdelivr.net/npm/@cornerstonejs/codec-openjpeg@1.2.3/dist/openjpegwasm.js");
-importScripts("https://cdn.jsdelivr.net/npm/geotiff");
+importScripts("https://cdn.jsdelivr.net/npm/geotiff@2.1.2");
 
 let decoder = {}
 OpenJPEGWASM({ 'locateFile': (path, scriptDirectory) => "https://cdn.jsdelivr.net/npm/@cornerstonejs/codec-openjpeg@1.2.3/dist/" + path }).then(openjpegWASM => {
