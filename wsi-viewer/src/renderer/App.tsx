@@ -5,14 +5,6 @@ import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 import uhnLeafUrl from './assets/uhn-leaf.png'
 
-const THUMBNAIL_WORKERS = 1
-
-type Imagebox3Instance = {
-  init: () => Promise<void>
-  getEmbeddedLabel?: (width: number, height: number) => Promise<Blob | undefined>
-  destroyWorkerPool?: () => void
-}
-
 function slideLabelLines(slide: ScannedSlide) {
   const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
   const pathSpecimen = pathText
@@ -70,25 +62,6 @@ export default function App() {
     rescan()
   }, [rescan])
 
-  const loadEmbeddedLabelThumbnail = useCallback(async (slideId: string, url: string) => {
-    let ib: Imagebox3Instance | null = null
-    try {
-      const { default: Imagebox3 } = await import('../wsi/imagebox3.mjs')
-      const imagebox = new Imagebox3(url, THUMBNAIL_WORKERS) as Imagebox3Instance
-      ib = imagebox
-      await imagebox.init()
-      const b = await imagebox.getEmbeddedLabel?.(128, 128)
-      if (b) {
-        const o = URL.createObjectURL(b)
-        setThumbs((m) => ({ ...m, [slideId]: o }))
-        return o
-      }
-      return undefined
-    } finally {
-      ib?.destroyWorkerPool?.()
-    }
-  }, [])
-
   const openSlide = useCallback(async (sl: ScannedSlide) => {
     const requestId = openRequestId.current + 1
     openRequestId.current = requestId
@@ -106,19 +79,6 @@ export default function App() {
         return
       }
       setWsiUrl(u)
-      if (sl.ext !== '.ndpi') {
-        void loadEmbeddedLabelThumbnail(sl.id, u)
-          .then((thumb) => {
-            if (!thumb && !sl.thumbnailDataUrl) {
-              setThumbs((m) => ({ ...m, [sl.id]: null }))
-            }
-          })
-          .catch(() => {
-            if (!sl.thumbnailDataUrl) {
-              setThumbs((m) => ({ ...m, [sl.id]: null }))
-            }
-          })
-      }
     } catch (e) {
       if (openRequestId.current !== requestId) {
         return
@@ -126,48 +86,31 @@ export default function App() {
       setWsiUrl(null)
       setErr(String(e))
     }
-  }, [loadEmbeddedLabelThumbnail])
+  }, [])
 
   const handleViewerError = useCallback((e: string) => {
     setErr(e)
   }, [])
 
-  /** Thumbnail: use embedded WSI lab label only; null means fallback to slide title. */
+  /** Thumbnail: use Evidence sidecar label only; null means fallback to slide title. */
   useEffect(() => {
-    let cancelled = false
     const q = slides.filter((s) => !thumbDone.current.has(s.id))
-    async function run() {
+    if (!q.length) {
+      return
+    }
+    for (const sl of q) {
+      thumbDone.current.add(sl.id)
+    }
+    setThumbs((m) => {
+      const next = { ...m }
       for (const sl of q) {
-        if (cancelled) {
-          return
+        if (!sl.thumbnailDataUrl) {
+          next[sl.id] = null
         }
-        thumbDone.current.add(sl.id)
-        try {
-          if (sl.unsupportedReason || sl.requiresExtraction || sl.ext === '.ndpi' || sl.thumbnailDataUrl) {
-            setThumbs((m) => ({ ...m, [sl.id]: null }))
-            continue
-          }
-          const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
-          if (cancelled) {
-            return
-          }
-          await loadEmbeddedLabelThumbnail(sl.id, u)
-          setThumbs((m) => (m[sl.id] ? m : { ...m, [sl.id]: null }))
-        } catch {
-          if (!cancelled) {
-            setThumbs((m) => ({ ...m, [sl.id]: null }))
-          }
-        }
-        await new Promise((r) => {
-          setTimeout(r, 200)
-        })
       }
-    }
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [loadEmbeddedLabelThumbnail, slides])
+      return next
+    })
+  }, [slides])
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">

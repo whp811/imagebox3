@@ -65,7 +65,27 @@ function normalizeStain(value?: string) {
   if (/^h\s*(?:&|and|\+|-)\s*e$/i.test(cleaned)) {
     return 'H&E'
   }
+  if (/^movat$/i.test(cleaned)) {
+    return 'Movat'
+  }
+  if (/^red\s*(?:heart|hrt)$/i.test(cleaned)) {
+    return 'REDheart'
+  }
   return cleaned.replace(/\s+/g, ' ')
+}
+
+function parseKnownStainToken(text: string) {
+  const clean = text.replace(/\0/g, '')
+  if (/(^|[_\-\s/\\])H\s*(?:&|and|\+|-)\s*E(?=($|[_\-\s/\\]))/i.test(clean)) {
+    return 'H&E'
+  }
+  if (/(^|[_\-\s/\\])movat(?=($|[_\-\s/\\]))/i.test(clean)) {
+    return 'Movat'
+  }
+  if (/(^|[_\-\s/\\])red\s*(?:heart|hrt)(?=($|[_\-\s/\\]))/i.test(clean)) {
+    return 'REDheart'
+  }
+  return undefined
 }
 
 function parseSpecimenId(text: string) {
@@ -92,32 +112,13 @@ function parseStain(text: string) {
   if (normalized) {
     return normalized
   }
-  if (/\bH\s*(?:&|and|\+|-)\s*E\b/i.test(text)) {
-    return 'H&E'
-  }
-  return undefined
+  return parseKnownStainToken(text)
 }
 
 function mergeMeta(primary: SlideLabelMeta, fallback: SlideLabelMeta): SlideLabelMeta {
   return {
     specimenId: primary.specimenId || fallback.specimenId,
     stain: primary.stain || fallback.stain,
-  }
-}
-
-async function readWsiLabelMeta(path: string): Promise<SlideLabelMeta> {
-  try {
-    const { fromFile } = await import('geotiff')
-    const tiff = await fromFile(path)
-    const image = await tiff.getImage(0)
-    const fileDirectory = image.fileDirectory
-    const description = String(fileDirectory.ImageDescription ?? fileDirectory.imageDescription ?? '')
-    return {
-      specimenId: parseSpecimenId(description),
-      stain: parseStain(description),
-    }
-  } catch {
-    return {}
   }
 }
 
@@ -192,13 +193,7 @@ function readPathLabelMeta(slidePath: string): SlideLabelMeta {
 async function readSlideLabelMeta(path: string): Promise<SlideLabelMeta> {
   const pathMeta = readPathLabelMeta(path)
   const evidenceMeta = await readEvidenceLabelMeta(path)
-  const evidenceOrPathMeta = mergeMeta(evidenceMeta, pathMeta)
-  if (evidenceOrPathMeta.specimenId && evidenceOrPathMeta.stain) {
-    return evidenceOrPathMeta
-  }
-
-  const wsiMeta = TIFF_WSI_EXTS.has(extname(path).toLowerCase()) ? await readWsiLabelMeta(path) : {}
-  return mergeMeta(wsiMeta, evidenceOrPathMeta)
+  return mergeMeta(evidenceMeta, pathMeta)
 }
 
 function isTextMetaEntry(name: string) {
@@ -213,7 +208,7 @@ function isPreferredLabelImageName(name: string) {
   if (!LABEL_IMAGE_EXTS.has(pathPosix.extname(name).toLowerCase())) {
     return false
   }
-  return /(^|[-_\s])(label|thumb|thumbnail)([-_\s.]|$)/i.test(pathPosix.basename(name))
+  return /(^|[-_\s])(label|thumb|thumbnail)([-_\s.]|$)/i.test(zipBasename(name))
 }
 
 function imageMimeForEntry(name: string) {
@@ -266,7 +261,17 @@ function sortLabelImageCandidates(names: string[], evidenceRoot?: string) {
 }
 
 function splitZipPath(name: string) {
-  return name.split('/').filter(Boolean)
+  return name.split(/[\\/]+/).filter(Boolean)
+}
+
+function zipDirname(name: string) {
+  const normalized = name.replace(/\\/g, '/')
+  return pathPosix.dirname(normalized)
+}
+
+function zipBasename(name: string) {
+  const normalized = name.replace(/\\/g, '/')
+  return pathPosix.basename(normalized)
 }
 
 function isEvidenceDirName(name?: string) {
@@ -286,17 +291,17 @@ function isUnderEvidenceDirForSlide(entryName: string, slideDir: string) {
 }
 
 function isUnderAnyEvidenceDir(entryName: string) {
-  const dirParts = splitZipPath(pathPosix.dirname(entryName))
+  const dirParts = splitZipPath(zipDirname(entryName))
   return dirParts.some(isEvidenceDirName)
 }
 
 function candidateZipSidecarEntries(slideEntryName: string, zipEntryNames: string[], singleSlideInZip: boolean) {
-  const slideDir = pathPosix.dirname(slideEntryName)
+  const slideDir = zipDirname(slideEntryName)
   return zipEntryNames.filter((name) => {
     if (name === slideEntryName) {
       return false
     }
-    const entryDir = pathPosix.dirname(name)
+    const entryDir = zipDirname(name)
     return entryDir === slideDir
       || isUnderEvidenceDirForSlide(name, slideDir)
       || (singleSlideInZip && (entryDir === '.' || isUnderAnyEvidenceDir(name)))
@@ -308,7 +313,7 @@ function candidateZipMetaEntries(slideEntryName: string, zipEntryNames: string[]
 }
 
 function candidateZipLabelImageEntries(slideEntryName: string, zipEntryNames: string[], singleSlideInZip: boolean) {
-  const slideDir = pathPosix.dirname(slideEntryName)
+  const slideDir = zipDirname(slideEntryName)
   return sortLabelImageCandidates(candidateZipSidecarEntries(slideEntryName, zipEntryNames, singleSlideInZip)
     .filter(isLabelImageEntry)
     .filter((name) => isPreferredLabelImageName(name) || isUnderEvidenceDirForSlide(name, slideDir) || (singleSlideInZip && isUnderAnyEvidenceDir(name))))
@@ -388,7 +393,7 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
     const zipEntryNames = entries.map((entry) => entry.fileName)
     const wsiEntries = entries.filter((entry) => isWsiFile(entry.fileName))
     for (const entry of wsiEntries) {
-      const fileName = pathPosix.basename(entry.fileName)
+      const fileName = zipBasename(entry.fileName)
       const source = makeZipEntrySource(zipPath, entry.fileName)
       const meta = await readZipSlideLabelMeta(zipPath, entry.fileName, zipEntryNames, wsiEntries.length === 1)
       const thumbnailDataUrl = await readZipLabelImageDataUrl(zipPath, entry.fileName, zipEntryNames, wsiEntries.length === 1)
@@ -446,11 +451,11 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
           stain: meta.stain,
           fileName,
           absolutePath: p,
-        relativeToSlides: rel,
-        ext: extname(e.name).toLowerCase(),
-        sizeBytes: s.size,
-        thumbnailDataUrl: await readEvidenceThumbnailDataUrl(p),
-      })
+          relativeToSlides: rel,
+          ext: extname(e.name).toLowerCase(),
+          sizeBytes: s.size,
+          thumbnailDataUrl: await readEvidenceThumbnailDataUrl(p),
+        })
       }
     }
   }

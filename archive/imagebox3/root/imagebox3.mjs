@@ -155,7 +155,7 @@ class Imagebox3 {
    * @param {File|string} imageSource - (Required) The local File object or the remote URL referencing the TIFF file.
    * @param {number} [numWorkers] - The number of web workers to be used to to decode image tiles. Defaults to 0, meaning all decoding operations are performed on the main thread.
    */
-  constructor(imageSource, numWorkers, openslideOnly = false) {
+  constructor(imageSource, numWorkers, openslideOnly = true) {
     if (imageSource instanceof File || typeof (imageSource) === 'string') {
       this.imageSource = typeof (imageSource) === 'string' ? decodeURIComponent(imageSource) : imageSource
     } else {

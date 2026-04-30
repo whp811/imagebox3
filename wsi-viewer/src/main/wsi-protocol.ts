@@ -110,7 +110,7 @@ export function registerWsiSchemesEarly() {
 }
 
 /**
- * Serves file bytes; GeoTIFF uses fetch+Range on wsi:// URL.
+ * Serves file bytes; OpenSlide WASM uses fetch+Range on wsi:// URL.
  * Call in app.whenReady().
  */
 export function registerWsiFileHandler() {

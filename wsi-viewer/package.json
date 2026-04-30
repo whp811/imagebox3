@@ -1,10 +1,10 @@
 {
   "name": "wsi-hive",
   "version": "0.1.0",
-  "description": "Portable local whole-slide viewer (Imagebox3 + OpenSeadragon + Electron)",
+  "description": "Portable local whole-slide viewer (OpenSlide WASM + OpenSeadragon + Electron)",
   "main": "out/main/index.js",
   "type": "module",
-  "author": "imagebox3",
+  "author": "wsi-hive",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -22,7 +22,6 @@
   "dependencies": {
     "@conflux-xyz/openslide-wasm": "^2.3.0",
     "clsx": "^2.1.1",
-    "geotiff": "2.1.2",
     "lucide-react": "^0.468.0",
     "openseadragon": "5.0.1",
     "react": "^18.3.1",

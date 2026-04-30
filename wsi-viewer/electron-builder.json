@@ -1,5 +1,5 @@
 {
-  "appId": "com.imagebox3.wsihive",
+  "appId": "com.wsihive.viewer",
   "productName": "WSI Hive",
   "files": [
     "out/**/*",

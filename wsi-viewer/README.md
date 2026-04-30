@@ -1,6 +1,6 @@
 # WSI Hive
 
-Portable **Electron** desktop app: **React** + **Imagebox3** (GeoTIFF + OpenSlide WASM) + **OpenSeadragon 5** for local whole-slide viewing. No network required at runtime.
+Portable **Electron** desktop app: **React** + **OpenSlide WASM** + **OpenSeadragon 5** for local whole-slide viewing. No network required at runtime.
 
 **Copy the built app to a USB drive** (or any folder); the user runs it from there with **no install and no download**. Put slides in a `Slides` folder next to the app. See [`FLASH_DRIVE.md`](FLASH_DRIVE.md).
 
@@ -23,8 +23,8 @@ npm run dist:usb     # release/WSI-Hive-USB with Windows app + Mac app + Slides
 
 ## How it works
 
-- **Main process** registers `wsi://` **fetch + Range** so `geotiff`/`fromUrl` can read local paths and stored WSI entries inside ZIPs without copying slides out. Compressed WSI entries are transparently materialized into the portable cache before viewing.
-- **Renderer** loads `Imagebox3` + custom **OpenSeadragon** tile source calling `getTile` for each view tile.
+- **Main process** registers `wsi://` **fetch + Range** so OpenSlide WASM can read local paths and stored WSI entries inside ZIPs without copying slides out. Compressed WSI entries are transparently materialized into the portable cache before viewing.
+- **Renderer** loads OpenSlide WASM + custom **OpenSeadragon** tile source reading each visible tile via `readRegion`.
 - **OpenSeadragon** control images: copied to `public/osd` via `postinstall`.
 
 ## USB root for Mac + Windows
@@ -54,5 +54,5 @@ Details: `packaging/universal/PACK.md` and `README.txt` (copied into the release
 ## Notes
 
 - shadcn/ui: this UI uses **Tailwind**-style layout and tokens. You can run `npx shadcn@latest init` in this folder and restyle; structure is already componentized (`App`, `WsiOsdView`).
-- Very large slide libraries: thumbnail queue is staggered; increase delay in `App.tsx` if the machine chokes.
+- Legacy Imagebox3 code lives under `../archive/imagebox3/` with restore notes.
 - If OpenSlide **workers** fail under `sandbox: true` in your environment, set `webPreferences.sandbox` to `false` in `src/main/index.ts` (trade security vs compatibility).

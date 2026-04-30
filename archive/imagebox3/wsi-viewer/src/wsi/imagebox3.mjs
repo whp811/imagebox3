@@ -211,6 +211,10 @@ function getImageSourceName(imageSource) {
   }
 }
 
+const USE_OPENSLIDE_FOR_ALL_WSI = true
+const WSI_SOURCE_RE = /\.(svs|tif|tiff|gtiff|ndpi)$/i
+const GEOTIFF_SOURCE_RE = /\.(svs|tif|tiff|gtiff)$/i
+
 /* Class representing an Imagebox3 instance of a whole slide image. */
 class Imagebox3 {
 
@@ -234,15 +238,17 @@ class Imagebox3 {
     this.supportedDecoders = undefined
 
     const srcName = getImageSourceName(imageSource);
-    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff)$/i);
-    const isOpenSlideOnly = srcName.match(/\.(ndpi)$/i);
+    const isWsiSource = WSI_SOURCE_RE.test(srcName);
+    const canUseGeoTIFF = GEOTIFF_SOURCE_RE.test(srcName);
 
-    if (isTiffOrSVS) {
-      this.driver = new GeoTIFFDriver(this.imageSource, this);
-    } else if (isOpenSlideOnly) {
+    if (!isWsiSource) {
+      throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, .gtiff, or .ndpi.`)
+    }
+
+    if (USE_OPENSLIDE_FOR_ALL_WSI || !canUseGeoTIFF) {
       this.driver = new OpenSlideDriver(this.imageSource, this);
     } else {
-      throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, .gtiff, or .ndpi.`)
+      this.driver = new GeoTIFFDriver(this.imageSource, this);
     }
   }
 

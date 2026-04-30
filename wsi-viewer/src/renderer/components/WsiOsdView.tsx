@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import OpenSeadragon from 'openseadragon'
-import { buildImagebox3OpenSeadragonTileSource } from '../lib/imagebox3-tilesource'
+import { buildOpenSlideOpenSeadragonTileSource } from '../lib/openslide-tilesource'
 import { cn } from '../lib/utils'
 
 type Props = {
@@ -10,12 +10,12 @@ type Props = {
 }
 
 /**
- * OpenSeadragon + Imagebox3. Destroys previous viewer on URL change.
+ * OpenSeadragon + OpenSlide WASM. Destroys previous viewer on URL change.
  */
 export function WsiOsdView({ wsiUrl, className, onError }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<ReturnType<typeof OpenSeadragon> | null>(null)
-  const imageboxRef = useRef<unknown>(null)
+  const slideRef = useRef<unknown>(null)
   const [ready, setReady] = useState(false)
   const [showLoader, setShowLoader] = useState(false)
   const [loadProgress, setLoadProgress] = useState(0)
@@ -29,14 +29,14 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
       }
       viewerRef.current = null
     }
-    if (imageboxRef.current && typeof (imageboxRef.current as { destroyWorkerPool?: () => void }).destroyWorkerPool === 'function') {
+    if (slideRef.current && typeof (slideRef.current as { destroy?: () => void }).destroy === 'function') {
       try {
-        ;(imageboxRef.current as { destroyWorkerPool: () => void }).destroyWorkerPool()
+        ;(slideRef.current as { destroy: () => void }).destroy()
       } catch {
         /* */
       }
     }
-    imageboxRef.current = null
+    slideRef.current = null
   }, [])
 
   useEffect(() => {
@@ -59,12 +59,12 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
           return
         }
         ref.current.style.background = '#ffffff'
-        const { imagebox3, tileSource } = await buildImagebox3OpenSeadragonTileSource(wsiUrl)
+        const { slide, tileSource } = await buildOpenSlideOpenSeadragonTileSource(wsiUrl)
         if (cancelled) {
-          imagebox3.destroyWorkerPool?.()
+          slide.destroy?.()
           return
         }
-        imageboxRef.current = imagebox3
+        slideRef.current = slide
         const v = OpenSeadragon({
           element: ref.current!,
           tileSources: tileSource,
