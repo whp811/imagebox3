@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, FolderOpen } from 'lucide-react'
 import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
+import uhnLeafUrl from './assets/uhn-leaf.png'
 
 const THUMBNAIL_WORKERS = 1
 
@@ -127,7 +128,10 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex h-12 shrink-0 items-center border-b border-border px-3">
-        <img src="/logo-Labs.svg" alt="Labs" className="h-8 w-auto max-w-[180px]" draggable={false} />
+        <div className="flex items-center gap-2" aria-label="UHN Laboratory">
+          <img src={uhnLeafUrl} alt="" className="h-8 w-auto shrink-0" draggable={false} />
+          <span className="text-xl font-bold leading-none text-[#1c2f63]">UHN Laboratory</span>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"

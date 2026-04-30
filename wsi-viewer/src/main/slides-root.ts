@@ -38,8 +38,8 @@ export function getApplicationRootDir(): string {
   const exe = app.getPath('exe')
   let base: string
   if (process.platform === 'darwin') {
-    // .../X.app/Contents/MacOS/executable -> the tree that contains the .app bundle
-    base = dirname(dirname(dirname(exe)))
+    // .../X.app/Contents/MacOS/executable -> the folder that contains X.app
+    base = dirname(dirname(dirname(dirname(exe))))
   } else {
     base = dirname(exe)
   }

@@ -9,23 +9,31 @@
 
 ## Folder layout on the stick
 
+The **production Mac + Windows handout** uses exactly three root items:
+
+```text
+USB root/
+  WSI-Hive-Windows.exe
+  WSI Hive.app
+  Slides/
+```
+
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 
-- **Windows:** one portable `.exe` (e.g. `WSI-Hive-win-x64-portable.exe` from `npm run dist`). All app resources are **inside** that file; the OS may use `%TEMP%` for extraction while running — that is outside your USB, not a second “app folder” you ship.
+- **Windows:** one portable `.exe` (`WSI-Hive-Windows.exe` in `release/WSI-Hive-USB/`). All app resources are **inside** that file; the OS may use `%TEMP%` for extraction while running — that is outside your USB, not a second “app folder” you ship.
 - **macOS:** one `WSI Hive.app` **bundle** — in Finder it looks like **a single app icon** (a package folder under the hood).
-- **Linux:** one `.AppImage` — a single self-contained file.
 
-Also on the same volume, **next to** that one executable / `.app` / `.AppImage`, keep:
+Also on the same volume, **next to** the executable / `.app`, keep:
 
 - **`Slides\`** (or `Slides/`) — put .svs / .ndpi / .tif / … here.
-- **`.wsi-hive-data\`** — **created on first run** (cache, settings on the drive; dot-prefixed so it is hidden in many file managers; on Windows you can `attrib +h` if you want it hidden in Explorer too).
+- **`.wsi-hive-data\`** — **created on first run** (cache, settings on the drive; dot-prefixed so it is hidden in many file managers; Windows builds also mark it hidden in Explorer).
 
 ```text
 E:\
-  WSI-Hive\   (or your folder name; example below is Windows)
-    WSI-Hive-win-x64-portable.exe
-    Slides\           ← your slide files
-    .wsi-hive-data\  ← first-run (optional to hide on Windows; see above)
+  WSI-Hive-Windows.exe
+  WSI Hive.app
+  Slides\           ← your slide files
+  .wsi-hive-data\  ← first-run (optional to hide on Windows; see above)
 ```
 
 **If you use the all-in-one zip from `npm run universal:assemble`:** you get a **root** with three clearly named starters (**WSI-Hive-Windows** / **WSI-Hive-macOS** / **WSI-Hive-Linux**), a **Slides** folder, and the per-OS app binaries under **.wsi-usb/** (intended to be out of the way in the file manager after a successful first start). Put slides in the root **Slides** folder, not under **.wsi-usb**.
@@ -41,8 +49,8 @@ E:\
 
 ## “Click to run”
 
-- **Windows:** double-click the portable `.exe` in the app folder.
-- **macOS:** open the universal bundle with **WSI-Hive-macOS.command**, or go into **.wsi-usb/mac/** and open `WSI Hive.app` (paths before/after a successful run may be hidden; see the bundle’s README).
+- **Windows:** double-click **WSI-Hive-Windows.exe**.
+- **macOS:** double-click **WSI Hive.app**.
 - **Linux:** run the `AppImage` (you may need `chmod +x` on Linux-native filesystems; on FAT32 USB, use the provided shell launcher if we ship one, or see `packaging/universal/PACK.md`).
 
 ## If something writes outside the drive
@@ -53,4 +61,4 @@ E:\
 
 ## Building the copy that goes on the stick
 
-On your machine: `cd wsi-viewer && npm run dist`, then copy the **output** from `dist/` (or use `npm run universal:assemble` and take `release/WSI-Hive-universal/`). **Do not** require the end user to run `npm` or install Node.
+On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.

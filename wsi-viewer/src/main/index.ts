@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { execFile } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerWsiFileHandler, registerWsiSchemesEarly, toWsiUrl } from './wsi-protocol'
@@ -16,6 +18,10 @@ if (app.isPackaged) {
   try {
     const root = getApplicationRootDir()
     const data = join(root, '.wsi-hive-data')
+    mkdirSync(data, { recursive: true })
+    if (process.platform === 'win32') {
+      execFile('attrib', ['+h', data], { windowsHide: true }, () => undefined)
+    }
     app.setPath('userData', data)
     app.setPath('cache', join(data, 'cache'))
   } catch (e) {

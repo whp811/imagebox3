@@ -17,6 +17,7 @@ npm install
 npm run dev          # Vite + Electron
 npm run build        # output to out/
 npm run dist         # electron-builder → dist/
+npm run dist:usb     # release/WSI-Hive-USB with Windows app + Mac app + Slides
 ```
 
 ## How it works
@@ -25,15 +26,19 @@ npm run dist         # electron-builder → dist/
 - **Renderer** loads `Imagebox3` + custom **OpenSeadragon** tile source calling `getTile` for each view tile.
 - **OpenSeadragon** control images: copied to `public/osd` via `postinstall`.
 
-## One zip for Mac + Windows + Linux (what you asked for)
+## USB root for Mac + Windows
 
-You still need **three separate builds** (OS cannot run one native binary for all), but the **user** can get **one folder or one .zip** that works like this:
+Production USB handout for Mac + Windows has exactly three root items:
 
-1. **Build** or **CI** produces `dist/` on **macOS**, **Windows**, and **Linux** (each platform’s own `npm run dist`, or a GitHub Actions matrix).
-2. From `wsi-viewer/`, run **`npm run universal:assemble`**. It places **three** root starters (**WSI-Hive-Windows.bat**, **WSI-Hive-macOS.command**, **WSI-Hive-Linux.sh**), a template **Slides/**, and the platform **payloads** under **.wsi-usb/{win,mac,linux}/** in `release/WSI-Hive-universal/`.
-3. **Zip that folder** and put it on a USB drive. The user **double-clicks their OS’s** starter. The **.wsi-usb** tree is made low-profile after a successful first launch (see `PACK.md`).
+- `WSI-Hive-Windows.exe` — portable Windows app. App files are inside the exe.
+- `WSI Hive.app` — macOS app bundle. Finder shows one app icon.
+- `Slides/` — put `.svs`, `.ndpi`, `.tif`, `.tiff`, `.mrxs`, etc. here.
 
-No one cross-platform binary: the OS you’re on is the one you click.
+From `wsi-viewer/`, run `npm run dist:usb`. Output lands in `release/WSI-Hive-USB/`.
+
+## One zip for Mac + Windows + Linux
+
+You still need separate native builds because each OS uses a different executable format. For Linux too, use `npm run universal:assemble`; it creates root starters plus hidden payloads in `release/WSI-Hive-universal/`.
 
 Details: `packaging/universal/PACK.md` and `README.txt` (copied into the release folder).
 

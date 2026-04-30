@@ -6,10 +6,12 @@
     "package.json"
   ],
   "directories": {
+    "buildResources": "build",
     "output": "dist"
   },
   "asar": true,
   "win": {
+    "icon": "build/icon.ico",
     "target": [
       {
         "target": "portable",
@@ -29,6 +31,7 @@
     "allowToChangeInstallationDirectory": true
   },
   "mac": {
+    "icon": "build/icon.icns",
     "target": [
       "dmg",
       "zip",
