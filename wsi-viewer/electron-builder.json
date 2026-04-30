@@ -1,0 +1,44 @@
+{
+  "appId": "com.imagebox3.wsihive",
+  "productName": "WSI Hive",
+  "files": [
+    "out/**/*",
+    "package.json"
+  ],
+  "directories": {
+    "output": "dist"
+  },
+  "asar": true,
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
+      "nsis"
+    ]
+  },
+  "portable": {
+    "artifactName": "WSI-Hive-${os}-${arch}-portable.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  },
+  "mac": {
+    "target": [
+      "dmg",
+      "zip",
+      "dir"
+    ],
+    "category": "public.app-category.medical"
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ]
+  }
+}

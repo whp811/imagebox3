@@ -1,0 +1,1 @@
+Place whole-slide images in this folder (next to the three platform starters and the .wsi-usb support folder). You can remove this file.
