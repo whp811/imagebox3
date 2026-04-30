@@ -5,7 +5,7 @@ import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
-const uhnLabsLogoUrl = '/logo-Labs.svg'
+const uhnLabsLogoUrl = `${import.meta.env.BASE_URL || './'}logo-Labs.svg`
 
 function slideLabelLines(slide: ScannedSlide) {
   const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`

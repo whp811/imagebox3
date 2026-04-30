@@ -9,6 +9,8 @@ type Props = {
   onError?: (e: string) => void
 }
 
+const osdImagePrefixUrl = `${import.meta.env.BASE_URL || './'}osd/images/`
+
 /**
  * OpenSeadragon + OpenSlide WASM. Destroys previous viewer on URL change.
  */
@@ -80,7 +82,7 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
           timeout: 1000 * 1000,
           showNavigationControl: false,
           placeholderFillStyle: '#ffffff',
-          prefixUrl: '/osd/images/',
+          prefixUrl: osdImagePrefixUrl,
         })
         viewerRef.current = v
         v.container.style.background = '#ffffff'
