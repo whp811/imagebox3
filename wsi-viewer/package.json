@@ -20,6 +20,7 @@
     "postinstall": "node scripts/copy-osd-assets.cjs"
   },
   "dependencies": {
+    "@conflux-xyz/openslide-wasm": "^2.3.0",
     "clsx": "^2.1.1",
     "geotiff": "2.1.2",
     "lucide-react": "^0.468.0",

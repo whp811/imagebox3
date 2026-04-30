@@ -70,6 +70,136 @@ class GeoTIFFDriver {
   }
 }
 
+class OpenSlideDriver {
+  constructor(imageSource, imageboxInstance) {
+    this.source = imageSource;
+    this.parent = imageboxInstance
+    this.os = null;
+    this.slide = null
+    this.numWorkers = imageboxInstance.numWorkers || 1;
+    this.levelCount = 0
+    this.levelDimensions = []
+    this.levelDownsamples = []
+  }
+
+  async init(imageSource) {
+    if (imageSource) {
+      this.source = imageSource
+    }
+
+    const { default: OpenSlide } = await import('@conflux-xyz/openslide-wasm')
+    this.os = new OpenSlide({ workers: this.numWorkers || 1 });
+    await this.os.initialize()
+    this.slide = await this.os.open(this.source);
+
+    this.levelCount = await this.slide.getLevelCount();
+    this.levelDimensions = [];
+    this.levelDownsamples = [];
+    for (let i = 0; i < this.levelCount; i++) {
+      this.levelDimensions[i] = await this.slide.getLevelDimensions(i);
+      this.levelDownsamples[i] = await this.slide.getLevelDownsample(i);
+    }
+
+    const { width, height } = await this.getInfo()
+    this.parent.tiff = {
+      openSlide: true,
+      maxWidth: width,
+      maxHeight: height,
+      levelCount: this.levelCount,
+      levelDimensions: this.levelDimensions,
+      levelDownsamples: this.levelDownsamples,
+    }
+  }
+
+  async getInfo() {
+    if (this._info) return this._info;
+    const [width, height] = this.levelDimensions[0];
+    const mppX = await this.slide.getPropertyValue("openslide.mpp-x");
+    const pixelsPerMicron = mppX ? 1 / parseFloat(mppX) : undefined;
+    this._info = { width, height, pixelsPerMicron };
+    return this._info;
+  }
+
+  getLevels() {
+    return this.levelDimensions.map(([width, height], index) => ({
+      width,
+      height,
+      downsample: this.levelDownsamples[index],
+      nativeLevel: index,
+    }))
+  }
+
+  rgbaToCanvas(data, width, height) {
+    const cv = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(width, height);
+    cv.width = width;
+    cv.height = height;
+    cv.getContext("2d").putImageData(new ImageData(data, width, height), 0, 0)
+    return cv
+  }
+
+  resizeCanvas(sourceCanvas, width, height) {
+    if (sourceCanvas.width === width && sourceCanvas.height === height) {
+      return sourceCanvas
+    }
+    const cv = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(width, height);
+    cv.width = width;
+    cv.height = height;
+    cv.getContext("2d").drawImage(sourceCanvas, 0, 0, width, height)
+    return cv
+  }
+
+  async canvasToBlob(canvas) {
+    if (canvas.convertToBlob) {
+      return await canvas.convertToBlob({ type: "image/png", quality: 1.0 })
+    }
+    return await new Promise((resolve) => {
+      canvas.toBlob(resolve, "image/png", 1.0)
+    })
+  }
+
+  async readRegionCanvas(x, y, level, width, height, signal) {
+    const pixelData = await this.slide.readRegion(x, y, level, width, height, { signal });
+    return this.rgbaToCanvas(pixelData, width, height)
+  }
+
+  async getTileCanvas(x, y, width, height, resolution) {
+    const renderWidth = Math.max(1, Math.round(resolution || width));
+    const renderHeight = Math.max(1, Math.round((renderWidth * height) / width));
+    const downsample = width / renderWidth;
+    const level = await this.slide.getBestLevelForDownsample(downsample);
+    const levelDownsample = this.levelDownsamples[level] || downsample;
+    const readWidth = Math.max(1, Math.ceil(width / levelDownsample));
+    const readHeight = Math.max(1, Math.ceil(height / levelDownsample));
+    const canvas = await this.readRegionCanvas(x, y, level, readWidth, readHeight);
+    return this.resizeCanvas(canvas, renderWidth, renderHeight)
+  }
+
+  async getTile(x, y, width, height, resolution) {
+    return await this.canvasToBlob(await this.getTileCanvas(x, y, width, height, resolution));
+  }
+
+  async getThumbnail(w, h) {
+    const [fullW, fullH] = this.levelDimensions[0];
+    return this.getTile(0, 0, fullW, fullH, Math.max(w, h));
+  }
+
+  async getEmbeddedLabel() {
+    return undefined
+  }
+
+  destroy() {
+    const terminateWorkers = () => {
+      this.os?.workers?.forEach((w) => w.worker?.terminate?.())
+    }
+    const closeRequest = this.slide?.close?.()
+    if (closeRequest?.finally) {
+      void closeRequest.finally(terminateWorkers)
+    } else {
+      terminateWorkers()
+    }
+  }
+}
+
 function getImageSourceName(imageSource) {
   if (imageSource instanceof File) return imageSource.name
   if (typeof imageSource !== 'string') return ''
@@ -104,10 +234,13 @@ class Imagebox3 {
     this.supportedDecoders = undefined
 
     const srcName = getImageSourceName(imageSource);
-    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff|ndpi)$/i);
+    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff)$/i);
+    const isOpenSlideOnly = srcName.match(/\.(ndpi)$/i);
 
     if (isTiffOrSVS) {
       this.driver = new GeoTIFFDriver(this.imageSource, this);
+    } else if (isOpenSlideOnly) {
+      this.driver = new OpenSlideDriver(this.imageSource, this);
     } else {
       throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, .gtiff, or .ndpi.`)
     }
@@ -165,6 +298,9 @@ class Imagebox3 {
    * @returns {Object}
    */
   async createWorkerPool(numWorkers) {
+    if (!(this.driver instanceof GeoTIFFDriver)) {
+      return undefined
+    }
     if (this.workerPool && this.workerPool.workers !== null && this.numWorkers === numWorkers) {
       return this.workerPool;
     }
@@ -267,6 +403,18 @@ class Imagebox3 {
       await this.createWorkerPool(this.numWorkers);
     }
     return await this.driver.getTileCanvas(topLeftX, topLeftY, tileWidthInImage, tileHeightInImage, tileResolutionToRender);
+  }
+
+  isOpenSlide() {
+    return this.driver instanceof OpenSlideDriver
+  }
+
+  getOpenSlideLevels() {
+    return this.driver instanceof OpenSlideDriver ? this.driver.getLevels() : []
+  }
+
+  async readOpenSlideRegionCanvas(x, y, level, width, height, signal) {
+    return await this.driver.readRegionCanvas(x, y, level, width, height, signal)
   }
 
   /**

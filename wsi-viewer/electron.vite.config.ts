@@ -34,6 +34,9 @@ export default defineConfig({
         input: resolve(__dirname, 'src/renderer/index.html')
       }
     },
+    optimizeDeps: {
+      exclude: ['@conflux-xyz/openslide-wasm']
+    },
     resolve: {
       alias: { '@': resolve(__dirname, 'src/renderer') }
     },

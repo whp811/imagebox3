@@ -215,6 +215,24 @@ async function readRasterTileToCanvas(level, x, y, pool, signal) {
   return convertPixelsToCanvas(data, width, height, level.image.fileDirectory)
 }
 
+async function readOpenSlideTileToCanvas(imagebox, level, x, y, signal) {
+  const left = x * level.tileWidth
+  const top = y * level.tileHeight
+  const right = Math.min(left + level.tileWidth, level.width)
+  const bottom = Math.min(top + level.tileHeight, level.height)
+  const width = Math.max(1, right - left)
+  const height = Math.max(1, bottom - top)
+  const downsample = level.downsample || level.fullWidth / level.width
+  return await imagebox.readOpenSlideRegionCanvas(
+    Math.round(left * downsample),
+    Math.round(top * downsample),
+    level.nativeLevel,
+    width,
+    height,
+    signal,
+  )
+}
+
 export class Imagebox3TileSource extends OpenSeadragon.TileSource {
   constructor(
     public imagebox,
@@ -233,6 +251,35 @@ export class Imagebox3TileSource extends OpenSeadragon.TileSource {
    */
   async initFromImagebox3() {
     const ib = this.imagebox
+    if (ib.isOpenSlide?.()) {
+      const levels = ib.getOpenSlideLevels?.() || []
+      if (!levels.length) {
+        throw new Error('No OpenSlide levels found')
+      }
+      const fullW = levels[0].width
+      const fullH = levels[0].height
+      this.width = this.fullWidth = fullW
+      this.height = this.fullHeight = fullH
+      this.tileSize = this.options.tileSize
+      this.tileOverlap = 0
+      this.dimensions = new OpenSeadragon.Point(fullW, fullH)
+      this.aspectRatio = fullW / fullH
+      this.minLevel = 0
+      this.levels = levels
+        .map((level) => ({
+          ...level,
+          fullWidth: fullW,
+          fullHeight: fullH,
+          tileWidth: this.tileSize,
+          tileHeight: this.tileSize,
+          openSlide: true,
+        }))
+        .sort((a, b) => a.width - b.width)
+      this.maxLevel = this.levels.length - 1
+      this._ready = true
+      return this
+    }
+
     const pyramid = ib.getPyramid?.()
     const slideImages = [...(pyramid?.slideImages || [])].sort((a, b) => b.getWidth() - a.getWidth())
     const tiledImages = slideImages.filter((image) => image.fileDirectory?.TileWidth && image.fileDirectory?.TileLength)
@@ -302,7 +349,9 @@ export class Imagebox3TileSource extends OpenSeadragon.TileSource {
     }
     const abortController = new AbortController()
     context.userData.abortController = abortController
-    const tilePromise = levelInfo.directNative
+    const tilePromise = levelInfo.openSlide
+      ? readOpenSlideTileToCanvas(this.imagebox, levelInfo, x, y, abortController.signal)
+      : levelInfo.directNative
       ? levelInfo.image.getTileOrStrip(x, y, null, this.imagebox.workerPool, abortController.signal).then((raster) => {
           if (!raster) {
             return null
@@ -376,7 +425,9 @@ export async function buildImagebox3OpenSeadragonTileSource(wsiUrl: string) {
   const { default: Imagebox3 } = await import('../../wsi/imagebox3.mjs')
   const ib = new Imagebox3(wsiUrl, TILE_WORKERS)
   await ib.init()
-  await ib.createWorkerPool(TILE_WORKERS)
+  if (!ib.isOpenSlide?.()) {
+    await ib.createWorkerPool(TILE_WORKERS)
+  }
   const ts = new Imagebox3TileSource(ib, wsiUrl)
   await ts.initFromImagebox3()
   return { imagebox3: ib, tileSource: ts as any }

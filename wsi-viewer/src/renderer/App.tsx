@@ -36,8 +36,6 @@ export default function App() {
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
-  const [openingSlideId, setOpeningSlideId] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const thumbDone = useRef<Set<string>>(new Set())
   const openRequestId = useRef(0)
@@ -48,7 +46,6 @@ export default function App() {
     }
     setLoading(true)
     setErr(null)
-    setStatus(null)
     try {
       const s = await window.wsiApi.rescan()
       setSlides(s)
@@ -84,7 +81,9 @@ export default function App() {
       if (b) {
         const o = URL.createObjectURL(b)
         setThumbs((m) => ({ ...m, [slideId]: o }))
+        return o
       }
+      return undefined
     } finally {
       ib?.destroyWorkerPool?.()
     }
@@ -94,26 +93,31 @@ export default function App() {
     const requestId = openRequestId.current + 1
     openRequestId.current = requestId
     setErr(null)
-    setStatus(sl.requiresExtraction ? 'Extracting compressed ZIP slide into cache. First open can take a while.' : null)
     if (sl.unsupportedReason) {
       setActive(sl)
       setWsiUrl(null)
       setErr(sl.unsupportedReason)
-      setStatus(null)
-      setOpeningSlideId(null)
       return
     }
     setActive(sl)
-    setOpeningSlideId(sl.id)
     try {
       const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
       if (openRequestId.current !== requestId) {
         return
       }
       setWsiUrl(u)
-      setStatus(null)
-      if (sl.requiresExtraction) {
-        void loadEmbeddedLabelThumbnail(sl.id, u).catch(() => undefined)
+      if (sl.ext !== '.ndpi') {
+        void loadEmbeddedLabelThumbnail(sl.id, u)
+          .then((thumb) => {
+            if (!thumb && !sl.thumbnailDataUrl) {
+              setThumbs((m) => ({ ...m, [sl.id]: null }))
+            }
+          })
+          .catch(() => {
+            if (!sl.thumbnailDataUrl) {
+              setThumbs((m) => ({ ...m, [sl.id]: null }))
+            }
+          })
       }
     } catch (e) {
       if (openRequestId.current !== requestId) {
@@ -121,11 +125,6 @@ export default function App() {
       }
       setWsiUrl(null)
       setErr(String(e))
-      setStatus(null)
-    } finally {
-      if (openRequestId.current === requestId) {
-        setOpeningSlideId(null)
-      }
     }
   }, [loadEmbeddedLabelThumbnail])
 
@@ -144,7 +143,7 @@ export default function App() {
         }
         thumbDone.current.add(sl.id)
         try {
-          if (sl.unsupportedReason || sl.requiresExtraction) {
+          if (sl.unsupportedReason || sl.requiresExtraction || sl.ext === '.ndpi' || sl.thumbnailDataUrl) {
             setThumbs((m) => ({ ...m, [sl.id]: null }))
             continue
           }
@@ -234,10 +233,12 @@ export default function App() {
             {loading && <p className="text-xs text-muted-foreground">Scanning…</p>}
             <ul className="flex flex-col gap-2">
               {slides.map((s) => {
-                const thumb = thumbs[s.id] ?? s.thumbnailDataUrl
+                const rawThumb = thumbs[s.id]
+                const evidenceThumb = s.thumbnailDataUrl
+                const activeThumb = active?.id === s.id && typeof rawThumb === 'string' ? rawThumb : undefined
+                const thumb = activeThumb || evidenceThumb || rawThumb
                 const labelLines = slideLabelLines(s)
                 const canOpen = !s.unsupportedReason
-                const isOpening = openingSlideId === s.id
                 return (
                   <li key={s.id}>
                     <button
@@ -245,7 +246,7 @@ export default function App() {
                       onClick={() => {
                         void openSlide(s)
                       }}
-                      title={s.unsupportedReason || (s.requiresExtraction ? 'Extracts to cache on first open' : labelLines.join('\n'))}
+                      title={s.unsupportedReason || labelLines.join('\n')}
                       className={cn(
                         'flex w-full flex-col overflow-hidden rounded-lg border p-2 text-left text-xs transition-colors',
                         active?.id === s.id
@@ -271,8 +272,6 @@ export default function App() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium" title={labelLines[0]}>{labelLines[0]}</div>
                           {labelLines[1] && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{labelLines[1]}</div>}
-                          {s.requiresExtraction && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{isOpening ? 'Extracting…' : 'ZIP cached on open'}</div>}
-                          {!canOpen && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">Unavailable</div>}
                         </div>
                       </div>
                     </button>
@@ -299,7 +298,6 @@ export default function App() {
         )}
         <main className="relative min-h-0 min-w-0 flex-1 bg-white">
           {err && <div className="absolute left-2 top-2 z-10 max-w-[90%] rounded bg-red-900/90 p-2 text-xs text-white">{err}</div>}
-          {status && !err && <div className="absolute left-2 top-2 z-10 max-w-[90%] rounded bg-zinc-900/85 p-2 text-xs text-white">{status}</div>}
           {wsiUrl ? (
             <WsiOsdView
               wsiUrl={wsiUrl}

@@ -122,22 +122,25 @@ async function readWsiLabelMeta(path: string): Promise<SlideLabelMeta> {
 }
 
 async function readEvidenceLabelMeta(slidePath: string): Promise<SlideLabelMeta> {
-  const evidenceDir = join(dirname(slidePath), 'Evidence')
-  let entries: { name: string, isFile: () => boolean }[] = []
+  const evidenceDir = await findLocalEvidenceDir(dirname(slidePath))
+  if (!evidenceDir) {
+    return {}
+  }
+
+  let files: string[] = []
   try {
-    entries = await readdir(evidenceDir, { withFileTypes: true })
+    files = await listLocalEvidenceFiles(evidenceDir)
   } catch {
     return {}
   }
 
   let meta: SlideLabelMeta = {}
-  for (const entry of entries) {
-    if (!entry.isFile()) {
+  for (const path of files) {
+    if (!isTextMetaEntry(path)) {
       continue
     }
-    const path = join(evidenceDir, entry.name)
     const fileStat = await stat(path).catch(() => null)
-    if (!fileStat || fileStat.size > 512 * 1024) {
+    if (!fileStat || fileStat.size > MAX_TEXT_META_BYTES) {
       continue
     }
     const text = await readFile(path, 'utf8').catch(() => '')
@@ -155,6 +158,29 @@ async function readEvidenceLabelMeta(slidePath: string): Promise<SlideLabelMeta>
   return meta
 }
 
+async function readEvidenceThumbnailDataUrl(slidePath: string): Promise<string | undefined> {
+  const evidenceDir = await findLocalEvidenceDir(dirname(slidePath))
+  if (!evidenceDir) {
+    return undefined
+  }
+  const files = await listLocalEvidenceFiles(evidenceDir).catch(() => [])
+  for (const path of sortLabelImageCandidates(files.filter(isLabelImageEntry), evidenceDir)) {
+    const mime = imageMimeForEntry(path)
+    if (!mime) {
+      continue
+    }
+    const fileStat = await stat(path).catch(() => null)
+    if (!fileStat || fileStat.size > MAX_LABEL_IMAGE_BYTES) {
+      continue
+    }
+    const data = await readFile(path).catch(() => Buffer.alloc(0))
+    if (data.length > 0) {
+      return `data:${mime};base64,${data.toString('base64')}`
+    }
+  }
+  return undefined
+}
+
 function readPathLabelMeta(slidePath: string): SlideLabelMeta {
   const pathText = `${dirname(slidePath)} ${basename(slidePath)}`
   return {
@@ -165,10 +191,6 @@ function readPathLabelMeta(slidePath: string): SlideLabelMeta {
 
 async function readSlideLabelMeta(path: string): Promise<SlideLabelMeta> {
   const pathMeta = readPathLabelMeta(path)
-  if (pathMeta.specimenId && pathMeta.stain) {
-    return pathMeta
-  }
-
   const evidenceMeta = await readEvidenceLabelMeta(path)
   const evidenceOrPathMeta = mergeMeta(evidenceMeta, pathMeta)
   if (evidenceOrPathMeta.specimenId && evidenceOrPathMeta.stain) {
@@ -206,6 +228,41 @@ function imageMimeForEntry(name: string) {
     default:
       return undefined
   }
+}
+
+async function findLocalEvidenceDir(slideDir: string) {
+  const entries = await readdir(slideDir, { withFileTypes: true }).catch(() => [])
+  const evidence = entries.find((entry) => entry.isDirectory() && isEvidenceDirName(entry.name))
+  return evidence ? join(slideDir, evidence.name) : undefined
+}
+
+async function listLocalEvidenceFiles(root: string): Promise<string[]> {
+  const out: string[] = []
+  async function walk(dir: string) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(path)
+      } else if (entry.isFile()) {
+        out.push(path)
+      }
+    }
+  }
+  await walk(root)
+  return out
+}
+
+function sortLabelImageCandidates(names: string[], evidenceRoot?: string) {
+  return [...names].sort((a, b) => {
+    const aIsLabel = isPreferredLabelImageName(a)
+    const bIsLabel = isPreferredLabelImageName(b)
+    const aInEvidence = evidenceRoot ? a.startsWith(evidenceRoot) : isUnderAnyEvidenceDir(a)
+    const bInEvidence = evidenceRoot ? b.startsWith(evidenceRoot) : isUnderAnyEvidenceDir(b)
+    return Number(bIsLabel) - Number(aIsLabel)
+      || Number(bInEvidence) - Number(aInEvidence)
+      || a.localeCompare(b, undefined, { sensitivity: 'base' })
+  })
 }
 
 function splitZipPath(name: string) {
@@ -252,18 +309,9 @@ function candidateZipMetaEntries(slideEntryName: string, zipEntryNames: string[]
 
 function candidateZipLabelImageEntries(slideEntryName: string, zipEntryNames: string[], singleSlideInZip: boolean) {
   const slideDir = pathPosix.dirname(slideEntryName)
-  return candidateZipSidecarEntries(slideEntryName, zipEntryNames, singleSlideInZip)
+  return sortLabelImageCandidates(candidateZipSidecarEntries(slideEntryName, zipEntryNames, singleSlideInZip)
     .filter(isLabelImageEntry)
-    .filter((name) => isPreferredLabelImageName(name) || isUnderEvidenceDirForSlide(name, slideDir) || (singleSlideInZip && isUnderAnyEvidenceDir(name)))
-    .sort((a, b) => {
-      const aIsLabel = isPreferredLabelImageName(a)
-      const bIsLabel = isPreferredLabelImageName(b)
-      const aInEvidence = isUnderEvidenceDirForSlide(a, slideDir) || isUnderAnyEvidenceDir(a)
-      const bInEvidence = isUnderEvidenceDirForSlide(b, slideDir) || isUnderAnyEvidenceDir(b)
-      return Number(bIsLabel) - Number(aIsLabel)
-        || Number(bInEvidence) - Number(aInEvidence)
-        || a.localeCompare(b, undefined, { sensitivity: 'base' })
-    })
+    .filter((name) => isPreferredLabelImageName(name) || isUnderEvidenceDirForSlide(name, slideDir) || (singleSlideInZip && isUnderAnyEvidenceDir(name))))
 }
 
 function readZipPathLabelMeta(zipPath: string, entryName: string): SlideLabelMeta {
@@ -304,9 +352,6 @@ async function readZipSlideLabelMeta(
   singleSlideInZip: boolean,
 ): Promise<SlideLabelMeta> {
   const pathMeta = readZipPathLabelMeta(zipPath, slideEntryName)
-  if (pathMeta.specimenId && pathMeta.stain) {
-    return pathMeta
-  }
   return mergeMeta(await readZipSidecarLabelMeta(zipPath, slideEntryName, zipEntryNames, singleSlideInZip), pathMeta)
 }
 
@@ -401,10 +446,11 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
           stain: meta.stain,
           fileName,
           absolutePath: p,
-          relativeToSlides: rel,
-          ext: extname(e.name).toLowerCase(),
-          sizeBytes: s.size,
-        })
+        relativeToSlides: rel,
+        ext: extname(e.name).toLowerCase(),
+        sizeBytes: s.size,
+        thumbnailDataUrl: await readEvidenceThumbnailDataUrl(p),
+      })
       }
     }
   }
