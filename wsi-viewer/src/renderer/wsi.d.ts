@@ -8,6 +8,7 @@ declare global {
       getInfo: () => Promise<SlidesInfo>
       rescan: () => Promise<ScannedSlide[]>
       pathToWsiUrl: (absolutePath: string) => Promise<string>
+      embeddedLabelThumbnail: (absolutePath: string) => Promise<string | null>
     }
   }
 }

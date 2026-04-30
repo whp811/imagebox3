@@ -18,7 +18,10 @@ export function normalizePackageStain(value?: string) {
   if (/^movat$/i.test(cleaned)) {
     return 'Movat'
   }
-  if (/^red\s*(?:heart|hrt)$/i.test(cleaned)) {
+  if (/^red\s*hrt$/i.test(cleaned)) {
+    return 'REDHRT'
+  }
+  if (/^red\s*heart$/i.test(cleaned)) {
     return 'REDheart'
   }
   return cleaned.replace(/\s+/g, ' ')

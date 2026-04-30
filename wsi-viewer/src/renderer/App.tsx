@@ -17,7 +17,7 @@ function slideLabelLines(slide: ScannedSlide) {
     : undefined
   return [
     slide.specimenId || packageMeta.specimenId || specimenFromPath || slide.label,
-    slide.stain || packageMeta.stain,
+    packageMeta.stain || slide.stain,
   ].filter(Boolean) as string[]
 }
 
@@ -31,7 +31,8 @@ export default function App() {
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
-  const thumbDone = useRef<Set<string>>(new Set())
+  const fallbackThumbDone = useRef<Set<string>>(new Set())
+  const embeddedThumbDone = useRef<Set<string>>(new Set())
   const openRequestId = useRef(0)
 
   const rescan = useCallback(async () => {
@@ -43,7 +44,8 @@ export default function App() {
     try {
       const s = await window.wsiApi.rescan()
       setSlides(s)
-      thumbDone.current = new Set()
+      fallbackThumbDone.current = new Set()
+      embeddedThumbDone.current = new Set()
       setThumbs({})
     } catch (e) {
       setErr(String(e))
@@ -94,14 +96,14 @@ export default function App() {
     setErr(e)
   }, [])
 
-  /** Thumbnail: use Evidence sidecar label only; null means fallback to slide title. */
+  /** Thumbnail: use Evidence sidecar label until selected WSI embedded label is available. */
   useEffect(() => {
-    const q = slides.filter((s) => !thumbDone.current.has(s.id))
+    const q = slides.filter((s) => !fallbackThumbDone.current.has(s.id))
     if (!q.length) {
       return
     }
     for (const sl of q) {
-      thumbDone.current.add(sl.id)
+      fallbackThumbDone.current.add(sl.id)
     }
     setThumbs((m) => {
       const next = { ...m }
@@ -113,6 +115,27 @@ export default function App() {
       return next
     })
   }, [slides])
+
+  useEffect(() => {
+    if (!active || active.unsupportedReason || embeddedThumbDone.current.has(active.id)) {
+      return
+    }
+    embeddedThumbDone.current.add(active.id)
+    void window.wsiApi
+      .embeddedLabelThumbnail(active.absolutePath)
+      .then((thumbnailDataUrl) => {
+        setThumbs((m) => ({
+          ...m,
+          [active.id]: thumbnailDataUrl || m[active.id] || null,
+        }))
+      })
+      .catch(() => {
+        setThumbs((m) => ({
+          ...m,
+          [active.id]: m[active.id] || null,
+        }))
+      })
+  }, [active])
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
@@ -183,7 +206,7 @@ export default function App() {
                 const rawThumb = thumbs[s.id]
                 const evidenceThumb = s.thumbnailDataUrl
                 const activeThumb = active?.id === s.id && typeof rawThumb === 'string' ? rawThumb : undefined
-                const thumb = activeThumb || evidenceThumb || rawThumb
+                const thumb = activeThumb || evidenceThumb || (rawThumb === null ? null : undefined)
                 const labelLines = slideLabelLines(s)
                 const canOpen = !s.unsupportedReason
                 return (

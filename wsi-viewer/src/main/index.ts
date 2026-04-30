@@ -7,6 +7,7 @@ import { registerWsiFileHandler, registerWsiSchemesEarly, toWsiUrl } from './wsi
 import { ensureSlidesDir, getApplicationRootDir, getSlidesRootPath } from './slides-root'
 import { scanForSlides } from './scan-slides'
 import { materializeZipEntrySourceForViewing } from './zip-source'
+import { readEmbeddedLabelThumbnailDataUrl } from './embedded-label-thumbnail'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -77,6 +78,9 @@ app.whenReady().then(() => {
   ipcMain.handle('wsi:pathToUrl', async (_e, { absolutePath }: { absolutePath: string }) => {
     const source = await materializeZipEntrySourceForViewing(absolutePath, app.getPath('userData'))
     return toWsiUrl(source)
+  })
+  ipcMain.handle('wsi:embeddedLabelThumbnail', async (_e, { absolutePath }: { absolutePath: string }) => {
+    return (await readEmbeddedLabelThumbnailDataUrl(absolutePath, app.getPath('userData'))) || null
   })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
