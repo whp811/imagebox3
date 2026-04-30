@@ -58,92 +58,14 @@ class GeoTIFFDriver {
   }
 }
 
-class OpenSlideDriver {
-  constructor(imageSource, imageboxInstance) {
-    this.source = imageSource;
-    this.parent = imageboxInstance
-    this.os = null;
-    this.slide = null
-    this.numWorkers = imageboxInstance.numWorkers || 1;
-  }
-
-  async init(imageSource) {
-    if (imageSource) {
-      this.source = imageSource
-    }
-
-    const osUrl = new URL('wsi-assets/openslide-wasm/openslide.js', window.location.href)
-    const { default: OpenSlide } = await import(/* @vite-ignore */ osUrl.href)
-    this.os = new OpenSlide({ workers: this.numWorkers || 5 });
-    await this.os.initialize()
-    // WARNING: For remote URLs, ensure that openslide-wasm
-    // supports lazy-loading via HTTP Range requests.
-    // If it downloads the whole file, this will fail for large WSIs.
-    this.slide = await this.os.open(this.source);
-
-    // Cache level dimensions and count to avoid repeated worker round-trips
-    this.levelCount = await this.slide.getLevelCount();
-    this.levelDimensions = [];
-    for (let i = 0; i < this.levelCount; i++) {
-      this.levelDimensions[i] = await this.slide.getLevelDimensions(i);
-    }
-
-    const { width, height } = await this.getInfo()
-    this.slide.maxWidth = width
-    this.slide.maxHeight = height
-    this.parent.tiff = this.slide
-  }
-
-  async getInfo() {
-    if (this._info) return this._info;
-    const [width, height] = this.levelDimensions[0];
-
-    const mppX = await this.slide.getPropertyValue("openslide.mpp-x");
-    const pixelsPerMicron = mppX ? 1 / parseFloat(mppX) : undefined;
-
-    this._info = { width, height, pixelsPerMicron };
-    return this._info;
-  }
-
-  async getTile(x, y, width, height, resolution) {
-    const downsample = width / resolution;
-    const level = await this.slide.getBestLevelForDownsample(downsample);
-    const [levelWidth, levelHeight] = this.levelDimensions[level];
-    const [fullImageWidth, fullImageHeight] = this.levelDimensions[0];
-
-    const tileWidth = Math.ceil(width * levelWidth / fullImageWidth)
-    const tileHeight = Math.ceil(height * levelHeight / fullImageHeight)
-    const ratio = height / width;
-    const renderWidth = Math.floor(resolution);
-    const renderHeight = Math.floor(resolution * ratio);
-
-    const pixelData = await this.slide.readRegion(x, y, level, tileWidth, tileHeight);
-
-    return await this.rgbaToBlob(pixelData, tileWidth, tileHeight, renderWidth, renderHeight);
-  }
-
-  async getThumbnail(w, h) {
-    const [fullW, fullH] = await this.slide.getLevelDimensions(0);
-    return this.getTile(0, 0, fullW, fullH, Math.max(w, h));
-  }
-
-  async rgbaToBlob(data, tileWidth, tileHeight, renderWidth, renderHeight) {
-    // Use Shared OffscreenCanvas to convert raw RGBA pixels to a PNG Blob
-    const cv = utils.getCanvas(renderWidth, renderHeight);
-    const ctx = cv.getContext("2d");
-    const imageData = new ImageData(data, tileWidth, tileHeight);
-    const imageBitmap = await createImageBitmap(imageData, 0, 0, tileWidth, tileHeight, {
-      resizeWidth: renderWidth,
-      resizeHeight: renderHeight,
-      resizeQuality: "high"
-    })
-    ctx.drawImage(imageBitmap, 0, 0);
-    return await cv.convertToBlob({ type: "image/png" });
-  }
-
-  destroy() {
-    this.slide?.close();
-    this.os?.terminate();
+function getImageSourceName(imageSource) {
+  if (imageSource instanceof File) return imageSource.name
+  if (typeof imageSource !== 'string') return ''
+  try {
+    const u = new URL(imageSource)
+    return u.searchParams.get('name') || u.pathname
+  } catch {
+    return imageSource
   }
 }
 
@@ -156,7 +78,7 @@ class Imagebox3 {
    * @param {File|string} imageSource - (Required) The local File object or the remote URL referencing the TIFF file.
    * @param {number} [numWorkers] - The number of web workers to be used to to decode image tiles. Defaults to 0, meaning all decoding operations are performed on the main thread.
    */
-  constructor(imageSource, numWorkers, openslideOnly = false) {
+  constructor(imageSource, numWorkers) {
     if (imageSource instanceof File || typeof (imageSource) === 'string') {
       this.imageSource = typeof (imageSource) === 'string' ? decodeURIComponent(imageSource) : imageSource
     } else {
@@ -168,14 +90,13 @@ class Imagebox3 {
     this.workerPool = undefined
     this.supportedDecoders = undefined
 
-    const srcName = (imageSource instanceof File) ? imageSource.name : imageSource;
+    const srcName = getImageSourceName(imageSource);
     const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff)$/i);
 
-    if (!openslideOnly && isTiffOrSVS) {
+    if (isTiffOrSVS) {
       this.driver = new GeoTIFFDriver(this.imageSource, this);
     } else {
-      // Fallback to OpenSlide for ndpi, mrxs, vms, etc.
-      this.driver = new OpenSlideDriver(this.imageSource, this);
+      throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, or .gtiff.`)
     }
   }
 
@@ -585,7 +506,8 @@ export const getImageSetsInPyramid = async (imagePyramid) => {
 
   const allImages = imagePyramid.allImages || await getAllImagesInPyramid(imagePyramid)
 
-  const ASPECT_RATIO_TOLERANCE = 0.01
+  // Some Aperio pyramids drift a few percent between levels; keep those levels together.
+  const ASPECT_RATIO_TOLERANCE = 0.1
 
   const imageSets = allImages
     .filter(image => image.fileDirectory.photometricInterpretation !== globals.photometricInterpretations.TransparencyMask)
@@ -721,10 +643,10 @@ export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = 
 
   let tileWidthToRender, tileHeightToRender
   if (tileWidth > tileHeight) {
-    tileHeightToRender = Math.floor(tileHeight * tileResolution / tileWidth)
+    tileHeightToRender = Math.max(1, Math.floor(tileHeight * tileResolution / tileWidth))
     tileWidthToRender = tileResolution
   } else {
-    tileWidthToRender = Math.floor(tileWidth * tileResolution / tileHeight)
+    tileWidthToRender = Math.max(1, Math.floor(tileWidth * tileResolution / tileHeight))
     tileHeightToRender = tileResolution
   }
 
@@ -732,8 +654,8 @@ export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = 
 
   const tileInImageLeftCoord = Math.max(Math.floor(tileX * optimalImageWidth / maxWidth), 0)
   const tileInImageTopCoord = Math.max(Math.floor(tileY * optimalImageHeight / maxHeight), 0)
-  const tileInImageRightCoord = Math.min(Math.floor((tileX + tileWidth) * optimalImageWidth / maxWidth), optimalImageWidth)
-  const tileInImageBottomCoord = Math.min(Math.floor((tileY + tileHeight) * optimalImageHeight / maxHeight), optimalImageHeight)
+  const tileInImageRightCoord = Math.min(Math.max(tileInImageLeftCoord + 1, Math.ceil((tileX + tileWidth) * optimalImageWidth / maxWidth)), optimalImageWidth)
+  const tileInImageBottomCoord = Math.min(Math.max(tileInImageTopCoord + 1, Math.ceil((tileY + tileHeight) * optimalImageHeight / maxHeight)), optimalImageHeight)
 
   const geotiffParameters = {
     width: tileWidthToRender,

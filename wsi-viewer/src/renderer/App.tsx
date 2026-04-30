@@ -65,6 +65,10 @@ export default function App() {
     setWsiUrl(u)
   }, [])
 
+  const handleViewerError = useCallback((e: string) => {
+    setErr(e)
+  }, [])
+
   /** Thumbnail: decode first slide region (lazy, 1 at a time) */
   useEffect(() => {
     let cancelled = false
@@ -208,9 +212,7 @@ export default function App() {
             <WsiOsdView
               wsiUrl={wsiUrl}
               className="h-full w-full"
-              onError={(e) => {
-                setErr(e)
-              }}
+              onError={handleViewerError}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-zinc-400">Select a slide in the sidebar</div>

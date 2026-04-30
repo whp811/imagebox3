@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import type { ScannedSlide } from '../shared/types'
 
 const WSI_EXTS = new Set([
-  '.svs', '.tif', '.tiff', '.gtiff', '.ndpi', '.mrxs', '.vms', '.vmu', '.scn', '.bif', '.tfl', '.isyntax', '.i2syntax',
+  '.svs', '.tif', '.tiff', '.gtiff',
 ])
 
 function isWsiFile(name: string) {

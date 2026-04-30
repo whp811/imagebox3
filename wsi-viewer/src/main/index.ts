@@ -40,6 +40,9 @@ function createWindow() {
   })
   const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
   if (!app.isPackaged && rendererDevUrl) {
+    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`)
+    })
     mainWindow.loadURL(rendererDevUrl)
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))

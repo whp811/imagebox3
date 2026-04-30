@@ -36,8 +36,8 @@ export class Imagebox3TileSource extends OpenSeadragon.TileSource {
     this.minLevel = 0
     this.levels = []
     for (let L = 0; L < 32; L++) {
-      const w = fullW / 2 ** L
-      const h = fullH / 2 ** L
+      const w = Math.max(1, Math.ceil(fullW / 2 ** L))
+      const h = Math.max(1, Math.ceil(fullH / 2 ** L))
       if (w < 16 && h < 16) {
         break
       }
@@ -86,8 +86,8 @@ export class Imagebox3TileSource extends OpenSeadragon.TileSource {
     const down = this.fullWidth / levelInfo.width
     const x0 = x * this.tileSize
     const y0 = y * this.tileSize
-    const tw = Math.min(this.tileSize, levelInfo.width - x0)
-    const th = Math.min(this.tileSize, levelInfo.height - y0)
+    const tw = Math.ceil(Math.min(this.tileSize, levelInfo.width - x0))
+    const th = Math.ceil(Math.min(this.tileSize, levelInfo.height - y0))
     if (tw <= 0 || th <= 0) {
       context.finish(null, src, 'empty')
       return

@@ -1,4 +1,5 @@
 import { open, readFile, stat } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { protocol } from 'electron'
 
 const SCHEME = 'wsi'
@@ -39,7 +40,7 @@ export function registerWsiSchemesEarly() {
 }
 
 /**
- * Serves file bytes; GeoTIFF / OpenSlide-WASM use fetch+Range on wsi:// URL.
+ * Serves file bytes; GeoTIFF uses fetch+Range on wsi:// URL.
  * Call in app.whenReady().
  */
 export function registerWsiFileHandler() {
@@ -103,5 +104,6 @@ export function registerWsiFileHandler() {
 }
 
 export function toWsiUrl(absoluteFilePath: string): string {
-  return `${SCHEME}://local/${enc.encode(absoluteFilePath)}`
+  const name = encodeURIComponent(basename(absoluteFilePath))
+  return `${SCHEME}://local/${enc.encode(absoluteFilePath)}?name=${name}`
 }
