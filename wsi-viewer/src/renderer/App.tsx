@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw, FolderOpen } from 'lucide-react'
+import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
-import uhnLeafUrl from './assets/uhn-leaf.png'
+
+const uhnLabsLogoUrl = '/logo-Labs.svg'
 
 function slideLabelLines(slide: ScannedSlide) {
   const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
+  const packageMeta = parseSlidePackageName(pathText)
   const pathSpecimen = pathText
     .match(/([A-Z]\d{2}-\d{4,6})[_-]([A-Z])[_-]?(\d+)(?:[_-](\d+))?/i)
   const specimenFromPath = pathSpecimen
     ? `${pathSpecimen[1]}-${pathSpecimen[2].toUpperCase()}${pathSpecimen[3]}${pathSpecimen[4] ? `-${pathSpecimen[4]}` : ''}`
     : undefined
-  const stainFromPath = /H\s*(?:&|and|\+|-)\s*E/i.test(pathText) ? 'H&E' : undefined
   return [
-    slide.specimenId || specimenFromPath || slide.label,
-    slide.stain || stainFromPath,
+    slide.specimenId || packageMeta.specimenId || specimenFromPath || slide.label,
+    slide.stain || packageMeta.stain,
   ].filter(Boolean) as string[]
 }
 
@@ -115,10 +117,12 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex h-12 shrink-0 items-center border-b border-border px-3">
-        <div className="flex items-center gap-2" aria-label="UHN Laboratory">
-          <img src={uhnLeafUrl} alt="" className="h-8 w-auto shrink-0" draggable={false} />
-          <span className="text-xl font-bold leading-none text-[#1c2f63]">UHN Laboratory</span>
-        </div>
+        <img
+          src={uhnLabsLogoUrl}
+          alt="UHN Laboratory Medicine"
+          className="h-8 w-auto shrink-0"
+          draggable={false}
+        />
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -248,7 +252,16 @@ export default function App() {
               onError={handleViewerError}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-zinc-400">Select a slide in the sidebar</div>
+            <div className="flex h-full flex-col items-center justify-center gap-6 px-8 text-sm">
+              <img
+                src={uhnLabsLogoUrl}
+                alt=""
+                className="w-[min(560px,70vw)] max-w-full select-none opacity-[0.12] grayscale brightness-0"
+                draggable={false}
+                aria-hidden="true"
+              />
+              <div className="text-[rgb(0_0_0_/_0.12)]">Select a slide in the sidebar</div>
+            </div>
           )}
         </main>
       </div>

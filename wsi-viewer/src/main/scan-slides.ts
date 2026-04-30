@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join, extname, relative, basename, dirname, posix as pathPosix } from 'node:path'
 import { stat } from 'node:fs/promises'
+import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { ScannedSlide } from '../shared/types'
 import { ZIP_DEFLATED, ZIP_STORED, listZipEntries, makeZipEntrySource, readZipEntryBuffer, readZipTextEntry } from './zip-source'
 
@@ -184,10 +185,10 @@ async function readEvidenceThumbnailDataUrl(slidePath: string): Promise<string |
 
 function readPathLabelMeta(slidePath: string): SlideLabelMeta {
   const pathText = `${dirname(slidePath)} ${basename(slidePath)}`
-  return {
+  return mergeMeta(parseSlidePackageName(pathText), {
     specimenId: parseSpecimenId(pathText),
     stain: parseStain(pathText),
-  }
+  })
 }
 
 async function readSlideLabelMeta(path: string): Promise<SlideLabelMeta> {
@@ -321,10 +322,10 @@ function candidateZipLabelImageEntries(slideEntryName: string, zipEntryNames: st
 
 function readZipPathLabelMeta(zipPath: string, entryName: string): SlideLabelMeta {
   const pathText = `${basename(zipPath)} ${entryName}`
-  return {
+  return mergeMeta(parseSlidePackageName(pathText), {
     specimenId: parseSpecimenId(pathText),
     stain: parseStain(pathText),
-  }
+  })
 }
 
 async function readZipSidecarLabelMeta(
