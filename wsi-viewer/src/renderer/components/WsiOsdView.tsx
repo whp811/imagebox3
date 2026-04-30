@@ -17,6 +17,8 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
   const viewerRef = useRef<ReturnType<typeof OpenSeadragon> | null>(null)
   const imageboxRef = useRef<unknown>(null)
   const [ready, setReady] = useState(false)
+  const [showLoader, setShowLoader] = useState(false)
+  const [loadProgress, setLoadProgress] = useState(0)
 
   const destroy = useCallback(() => {
     if (viewerRef.current) {
@@ -41,16 +43,22 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
     if (!wsiUrl || !ref.current) {
       destroy()
       setReady(false)
+      setShowLoader(false)
+      setLoadProgress(0)
       return
     }
     let cancelled = false
+    let finishId: number | undefined
     setReady(false)
+    setShowLoader(true)
+    setLoadProgress(0)
     ;(async () => {
       try {
         destroy()
         if (!ref.current) {
           return
         }
+        ref.current.style.background = '#ffffff'
         const { imagebox3, tileSource } = await buildImagebox3OpenSeadragonTileSource(wsiUrl)
         if (cancelled) {
           imagebox3.destroyWorkerPool?.()
@@ -70,24 +78,75 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
           minZoomImageRatio: 0.1,
           maxZoomPixelRatio: 4,
           timeout: 1000 * 1000,
-          showNavigationControl: true,
+          showNavigationControl: false,
+          placeholderFillStyle: '#ffffff',
           prefixUrl: '/osd/images/',
         })
         viewerRef.current = v
+        v.container.style.background = '#ffffff'
+        v.canvas.style.background = '#ffffff'
         v.addOnceHandler('open', () => {
           if (!cancelled) {
-            setReady(true)
+            setLoadProgress(100)
+            finishId = window.setTimeout(() => {
+              if (!cancelled) {
+                setReady(true)
+                setShowLoader(false)
+              }
+            }, 140)
           }
         })
       } catch (e) {
-        onError?.(String(e))
+        if (!cancelled) {
+          setReady(false)
+          setShowLoader(false)
+          onError?.(String(e))
+        }
       }
     })()
     return () => {
       cancelled = true
+      if (finishId) {
+        window.clearTimeout(finishId)
+      }
       destroy()
     }
   }, [wsiUrl, destroy, onError])
 
-  return <div className={cn('relative h-full w-full min-h-0', className)} ref={ref} data-osd-ready={ready} />
+  useEffect(() => {
+    if (!showLoader || ready) {
+      return
+    }
+    const id = window.setInterval(() => {
+      setLoadProgress((progress) => {
+        if (progress < 75) {
+          return Math.min(progress + 15, 75)
+        }
+        return Math.min(progress + 1, 96)
+      })
+    }, 100)
+    return () => {
+      window.clearInterval(id)
+    }
+  }, [showLoader, ready])
+
+  return (
+    <div className={cn('relative h-full w-full min-h-0 bg-white', className)} data-osd-ready={ready}>
+      <div ref={ref} className="absolute inset-0 bg-white" />
+      {showLoader && (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+          <div
+            className="h-1 w-64 overflow-hidden rounded-full bg-zinc-200"
+            role="progressbar"
+            aria-label="Slide loading progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(loadProgress)}
+          >
+            <div className="h-full rounded-full bg-zinc-400 transition-[width] duration-150" style={{ width: `${loadProgress}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

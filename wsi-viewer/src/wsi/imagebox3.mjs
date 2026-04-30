@@ -61,6 +61,10 @@ class GeoTIFFDriver {
     return await getImageThumbnail(this.tiff, tileParams, this.parent.workerPool);
   }
 
+  async getEmbeddedLabel(w, h) {
+    return await getEmbeddedLabel(this.tiff, w, h, this.parent.workerPool);
+  }
+
   destroy() {
     // GeoTIFF is stateless/buffer based, mostly no-op usually
   }
@@ -232,6 +236,10 @@ class Imagebox3 {
    */
   async getThumbnail(thumbnailWidth, thumbnailHeight) {
     return await this.driver.getThumbnail(thumbnailWidth, thumbnailHeight);
+  }
+
+  async getEmbeddedLabel(thumbnailWidth, thumbnailHeight) {
+    return await this.driver.getEmbeddedLabel(thumbnailWidth, thumbnailHeight);
   }
 
   /**
@@ -621,6 +629,64 @@ export const getImageInfo = async (imagePyramid) => {
   }
 
   return imageInfo
+}
+
+const getFileDirectoryDescription = (fileDirectory = {}) => (
+  String(fileDirectory.ImageDescription ?? fileDirectory.imageDescription ?? '').toLowerCase()
+)
+
+const getEmbeddedLabelImage = async (imagePyramid) => {
+  const allImages = imagePyramid.allImages || await getAllImagesInPyramid(imagePyramid)
+  const slideImages = imagePyramid.slideImages || await getSlideImagesInPyramid(imagePyramid)
+  const primaryImage = slideImages[0] || allImages[0]
+  if (!primaryImage) {
+    return undefined
+  }
+
+  const primaryWidth = primaryImage.getWidth()
+  const primaryHeight = primaryImage.getHeight()
+  return allImages
+    .filter((image) => {
+      if (image === primaryImage) {
+        return false
+      }
+      const width = image.getWidth()
+      const height = image.getHeight()
+      if (!width || !height || (width >= primaryWidth && height >= primaryHeight)) {
+        return false
+      }
+
+      return /\blabel\b/.test(getFileDirectoryDescription(image.fileDirectory))
+    })
+    .sort((a, b) => {
+      return (b.getWidth() * b.getHeight()) - (a.getWidth() * a.getHeight())
+    })[0]
+}
+
+export const getEmbeddedLabel = async (imagePyramid, thumbnailWidth, thumbnailHeight, pool) => {
+  if (typeof (imagePyramid?.ifdRequests) !== 'object') {
+    throw new Error("Malformed image pyramid. Please retry pyramid creation using the `getImagePyramid()` method.")
+  }
+
+  const labelImage = await getEmbeddedLabelImage(imagePyramid)
+  if (!labelImage) {
+    return undefined
+  }
+
+  const scale = Math.min(
+    1,
+    thumbnailWidth / labelImage.getWidth(),
+    thumbnailHeight / labelImage.getHeight(),
+  )
+  const width = Math.max(1, Math.round(labelImage.getWidth() * scale))
+  const height = Math.max(1, Math.round(labelImage.getHeight() * scale))
+  const geotiffParameters = { width, height, interleave: true }
+  if (pool) {
+    geotiffParameters.pool = pool
+  }
+
+  const data = await labelImage.readRasters(geotiffParameters)
+  return await utils.convertToImageBlob(data, width, height, labelImage.fileDirectory)
 }
 
 export const getImageThumbnail = async (imagePyramid, tileParams, pool) => {

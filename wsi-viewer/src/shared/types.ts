@@ -1,6 +1,9 @@
 export type ScannedSlide = {
   id: string
   label: string
+  specimenId?: string
+  stain?: string
+  fileName?: string
   absolutePath: string
   relativeToSlides: string
   ext: string

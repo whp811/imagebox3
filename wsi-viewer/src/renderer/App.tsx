@@ -1,22 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw, Microscope, FolderOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, FolderOpen } from 'lucide-react'
 import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
 const THUMBNAIL_WORKERS = 1
 
-function fmtSize(n: number) {
-  if (n < 1024) {
-    return `${n} B`
-  }
-  if (n < 1024 ** 2) {
-    return `${(n / 1024).toFixed(1)} KB`
-  }
-  if (n < 1024 ** 3) {
-    return `${(n / 1024 ** 2).toFixed(1)} MB`
-  }
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
+type Imagebox3Instance = {
+  init: () => Promise<void>
+  getEmbeddedLabel?: (width: number, height: number) => Promise<Blob | undefined>
+  destroyWorkerPool?: () => void
+}
+
+function slideLabelLines(slide: ScannedSlide) {
+  const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
+  const pathSpecimen = pathText
+    .match(/([A-Z]\d{2}-\d{4,6})[_-]([A-Z])[_-]?(\d+)(?:[_-](\d+))?/i)
+  const specimenFromPath = pathSpecimen
+    ? `${pathSpecimen[1]}-${pathSpecimen[2].toUpperCase()}${pathSpecimen[3]}${pathSpecimen[4] ? `-${pathSpecimen[4]}` : ''}`
+    : undefined
+  const stainFromPath = /H\s*(?:&|and|\+|-)\s*E/i.test(pathText) ? 'H&E' : undefined
+  return [
+    slide.specimenId || specimenFromPath || slide.label,
+    slide.stain || stainFromPath,
+  ].filter(Boolean) as string[]
 }
 
 export default function App() {
@@ -27,7 +34,7 @@ export default function App() {
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const thumbDone = useRef<Set<string>>(new Set())
 
   const rescan = useCallback(async () => {
@@ -71,11 +78,8 @@ export default function App() {
     setErr(e)
   }, [])
 
-  /** Thumbnail: decode first slide region (lazy, 1 at a time) */
+  /** Thumbnail: use embedded WSI lab label only; null means fallback to slide title. */
   useEffect(() => {
-    if (wsiUrl) {
-      return
-    }
     let cancelled = false
     const q = slides.filter((s) => !thumbDone.current.has(s.id))
     async function run() {
@@ -84,20 +88,29 @@ export default function App() {
           return
         }
         thumbDone.current.add(sl.id)
+        let ib: Imagebox3Instance | null = null
         try {
           const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
           const { default: Imagebox3 } = await import('../wsi/imagebox3.mjs')
-          const ib = new Imagebox3(u, THUMBNAIL_WORKERS)
-          await ib.init()
-          const b = await ib.getThumbnail(128, 128)
-          ib.destroyWorkerPool?.()
+          const imagebox = new Imagebox3(u, THUMBNAIL_WORKERS) as Imagebox3Instance
+          ib = imagebox
+          await imagebox.init()
+          const b = await imagebox.getEmbeddedLabel?.(128, 128)
           if (cancelled) {
             return
           }
-          const o = URL.createObjectURL(b)
-          setThumbs((m) => ({ ...m, [sl.id]: o }))
+          if (b) {
+            const o = URL.createObjectURL(b)
+            setThumbs((m) => ({ ...m, [sl.id]: o }))
+          } else {
+            setThumbs((m) => ({ ...m, [sl.id]: null }))
+          }
         } catch {
-          /* ignore */
+          if (!cancelled) {
+            setThumbs((m) => ({ ...m, [sl.id]: null }))
+          }
+        } finally {
+          ib?.destroyWorkerPool?.()
         }
         await new Promise((r) => {
           setTimeout(r, 200)
@@ -108,14 +121,12 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [slides, wsiUrl])
+  }, [slides])
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
       <header className="flex h-12 shrink-0 items-center border-b border-border px-3">
-        <Microscope className="mr-2 h-5 w-5" />
-        <h1 className="text-sm font-semibold">WSI Hive</h1>
-        <span className="ml-2 text-xs text-muted-foreground">local · portable</span>
+        <img src="/logo-Labs.svg" alt="Labs" className="h-8 w-auto max-w-[180px]" draggable={false} />
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -157,42 +168,46 @@ export default function App() {
             )}
             {loading && <p className="text-xs text-muted-foreground">Scanning…</p>}
             <ul className="flex flex-col gap-2">
-              {slides.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void openSlide(s)
-                    }}
-                    className={cn(
-                      'flex w-full flex-col overflow-hidden rounded-lg border p-2 text-left text-xs transition-colors',
-                      active?.id === s.id
-                        ? 'border-foreground/30 bg-background'
-                        : 'border-border hover:bg-background/80',
-                    )}
-                  >
-                    <div className="mb-1 flex items-start gap-2">
-                      <div className="size-14 shrink-0 overflow-hidden rounded bg-background">
-                        {thumbs[s.id] ? (
-                          <img src={thumbs[s.id]} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
-                            …
-                          </div>
-                        )}
+              {slides.map((s) => {
+                const thumb = thumbs[s.id]
+                const labelLines = slideLabelLines(s)
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void openSlide(s)
+                      }}
+                      className={cn(
+                        'flex w-full flex-col overflow-hidden rounded-lg border p-2 text-left text-xs transition-colors',
+                        active?.id === s.id
+                          ? 'border-foreground/30 bg-background'
+                          : 'border-border hover:bg-background/80',
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="size-14 shrink-0 overflow-hidden rounded bg-background">
+                          {typeof thumb === 'string' ? (
+                            <img src={thumb} alt="" className="h-full w-full object-contain" />
+                          ) : thumb === null ? (
+                            <div className="grid h-full w-full place-items-center px-1 text-center text-[8px] font-medium leading-tight text-muted-foreground">
+                              <span className="line-clamp-4 whitespace-pre-line break-all" title={labelLines.join('\n')}>{labelLines.join('\n')}</span>
+                            </div>
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
+                              …
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium" title={labelLines[0]}>{labelLines[0]}</div>
+                          {labelLines[1] && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{labelLines[1]}</div>}
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{s.label}</div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">{s.ext}</div>
-                        <div className="text-[10px] text-muted-foreground">{fmtSize(s.sizeBytes)}</div>
-                      </div>
-                    </div>
-                    <p className="line-clamp-2 text-[10px] text-muted-foreground" title={s.relativeToSlides}>
-                      {s.relativeToSlides}
-                    </p>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
             {!loading && slides.length === 0 && (
               <p className="text-xs text-muted-foreground">No WSI in Slides. Add files under the Slides folder and rescan.</p>
@@ -211,7 +226,7 @@ export default function App() {
             <ChevronRight className="mx-auto h-4 w-4" />
           </button>
         )}
-        <main className="relative min-h-0 min-w-0 flex-1 bg-black">
+        <main className="relative min-h-0 min-w-0 flex-1 bg-white">
           {err && <div className="absolute left-2 top-2 z-10 max-w-[90%] rounded bg-red-900/90 p-2 text-xs text-white">{err}</div>}
           {wsiUrl ? (
             <WsiOsdView
