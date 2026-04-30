@@ -1,4 +1,6 @@
 import { open, readFile, stat } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import { basename } from 'node:path'
 import { protocol } from 'electron'
 
@@ -6,6 +8,18 @@ const SCHEME = 'wsi'
 const PRIVILEGED = [
   { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]
+const MAX_OPEN_FILES = 16
+const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024
+
+type CachedFile = {
+  handle: FileHandle
+  size: number
+  mtimeMs: number
+  inUse: number
+  closeAfterUse: boolean
+}
+
+const openFiles = new Map<string, CachedFile>()
 
 const enc = {
   encode: (p: string) => Buffer.from(p, 'utf8').toString('base64url'),
@@ -33,6 +47,56 @@ function parseRange(rangeHeader: string | null, size: number): { start: number, 
   if (end >= size) end = size - 1
   if (start < 0 || start > end) return null
   return { start, end }
+}
+
+function closeCachedFile(entry: CachedFile) {
+  if (entry.inUse > 0) {
+    entry.closeAfterUse = true
+    return
+  }
+  void entry.handle.close().catch(() => {})
+}
+
+function evictOpenFiles() {
+  while (openFiles.size > MAX_OPEN_FILES) {
+    const oldest = openFiles.entries().next().value as [string, CachedFile] | undefined
+    if (!oldest) return
+    openFiles.delete(oldest[0])
+    closeCachedFile(oldest[1])
+  }
+}
+
+async function acquireCachedFile(abs: string, st: Stats): Promise<CachedFile> {
+  const cached = openFiles.get(abs)
+  if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) {
+    openFiles.delete(abs)
+    openFiles.set(abs, cached)
+    cached.inUse += 1
+    return cached
+  }
+
+  if (cached) {
+    openFiles.delete(abs)
+    closeCachedFile(cached)
+  }
+
+  const entry: CachedFile = {
+    handle: await open(abs, 'r'),
+    size: st.size,
+    mtimeMs: st.mtimeMs,
+    inUse: 1,
+    closeAfterUse: false,
+  }
+  openFiles.set(abs, entry)
+  evictOpenFiles()
+  return entry
+}
+
+function releaseCachedFile(entry: CachedFile) {
+  entry.inUse -= 1
+  if (entry.inUse <= 0 && entry.closeAfterUse) {
+    void entry.handle.close().catch(() => {})
+  }
 }
 
 export function registerWsiSchemesEarly() {
@@ -74,22 +138,39 @@ export function registerWsiFileHandler() {
     const r = request.headers.get('range')
     const pr = parseRange(r, fileSize)
     if (!pr) {
+      if (fileSize > MAX_FULL_FILE_BYTES) {
+        return new Response('Range header required for WSI files', {
+          status: 416,
+          headers: {
+            'content-type': 'text/plain',
+            'content-range': `bytes */${fileSize}`,
+            'accept-ranges': 'bytes',
+            'access-control-allow-origin': '*',
+          },
+        })
+      }
       const data = await readFile(abs)
       return new Response(data, {
         status: 200,
         headers: {
           'content-length': String(data.length),
           'content-type': 'application/octet-stream',
+          'accept-ranges': 'bytes',
           'access-control-allow-origin': '*',
         },
       })
     }
     const { start, end } = pr
     const len = end - start + 1
-    const fh = await open(abs, 'r')
     const buf = Buffer.alloc(len)
-    const { bytesRead } = await fh.read(buf, 0, len, start)
-    await fh.close()
+    const file = await acquireCachedFile(abs, st)
+    let bytesRead = 0
+    try {
+      const result = await file.handle.read(buf, 0, len, start)
+      bytesRead = result.bytesRead
+    } finally {
+      releaseCachedFile(file)
+    }
     const out = buf.subarray(0, bytesRead)
     return new Response(out, {
       status: 206,
@@ -97,6 +178,7 @@ export function registerWsiFileHandler() {
         'content-type': 'application/octet-stream',
         'content-length': String(out.length),
         'content-range': `bytes ${start}-${end}/${fileSize}`,
+        'accept-ranges': 'bytes',
         'access-control-allow-origin': '*',
       },
     })

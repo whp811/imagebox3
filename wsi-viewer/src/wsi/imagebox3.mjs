@@ -48,6 +48,14 @@ class GeoTIFFDriver {
     return await getImageTile(this.tiff, tileParams, this.parent.workerPool);
   }
 
+  async getTileCanvas(x, y, width, height, resolution) {
+    const tileParams = {
+      tileX: x, tileY: y, tileWidth: width, tileHeight: height,
+      tileResolution: resolution || Math.max(width, height)
+    };
+    return await getImageTileCanvas(this.tiff, tileParams, this.parent.workerPool);
+  }
+
   async getThumbnail(w, h) {
     const tileParams = { thumbnailWidthToRender: w, thumbnailHeightToRender: h };
     return await getImageThumbnail(this.tiff, tileParams, this.parent.workerPool);
@@ -88,6 +96,7 @@ class Imagebox3 {
     this.tiff = undefined
     this.numWorkers = Number.isInteger(numWorkers) ? numWorkers : 0
     this.workerPool = undefined
+    this.workerPoolRequest = undefined
     this.supportedDecoders = undefined
 
     const srcName = getImageSourceName(imageSource);
@@ -152,17 +161,32 @@ class Imagebox3 {
    * @returns {Object}
    */
   async createWorkerPool(numWorkers) {
-    if (this.workerPool && this.numWorkers === numWorkers) {
+    if (this.workerPool && this.workerPool.workers !== null && this.numWorkers === numWorkers) {
       return this.workerPool;
     }
-    if (this.workerPool) {
-      destroyPool(this.workerPool)
+    if (this.workerPoolRequest?.numWorkers === numWorkers) {
+      return await this.workerPoolRequest.promise;
     }
-    // Setup decoders and pool lazily
-    await this.getSupportedDecoders();
-    this.workerPool = await createPool(await this.tiff.getImage(0), numWorkers, this.supportedDecoders)
-    this.numWorkers = numWorkers
-    return this.workerPool
+    if (this.workerPool) {
+      this.workerPool = destroyPool(this.workerPool)
+    }
+    this.workerPoolRequest = {
+      numWorkers,
+      promise: (async () => {
+        await this.getSupportedDecoders();
+        const pool = await createPool(await this.tiff.getImage(0), numWorkers, this.supportedDecoders)
+        this.workerPool = pool
+        this.numWorkers = numWorkers
+        return pool
+      })()
+    }
+    try {
+      return await this.workerPoolRequest.promise
+    } finally {
+      if (this.workerPoolRequest?.numWorkers === numWorkers) {
+        this.workerPoolRequest = undefined
+      }
+    }
   }
 
   /**
@@ -171,7 +195,8 @@ class Imagebox3 {
    */
   destroyWorkerPool() {
     // HIGHLY RECOMMENDED WHEN LOADING A NEW IMAGE!!! OTHERWISE EACH NEW INSTANTATION WILL CREATE A NEW WORKER POOL!!!!!
-    destroyPool(this.workerPool)
+    this.workerPoolRequest = undefined
+    this.workerPool = destroyPool(this.workerPool)
     if (this.driver.destroy) this.driver.destroy();
   }
 
@@ -223,10 +248,17 @@ class Imagebox3 {
    * @returns {Blob}
    */
   async getTile(topLeftX, topLeftY, tileWidthInImage, tileHeightInImage, tileResolutionToRender, imageIndex = -1) {
-    if (this.driver instanceof GeoTIFFDriver && !this.workerPool && this.numWorkers > 0) {
+    if (this.driver instanceof GeoTIFFDriver && (!this.workerPool || this.workerPool.workers === null) && this.numWorkers > 0) {
       await this.createWorkerPool(this.numWorkers);
     }
     return await this.driver.getTile(topLeftX, topLeftY, tileWidthInImage, tileHeightInImage, tileResolutionToRender);
+  }
+
+  async getTileCanvas(topLeftX, topLeftY, tileWidthInImage, tileHeightInImage, tileResolutionToRender, imageIndex = -1) {
+    if (this.driver instanceof GeoTIFFDriver && (!this.workerPool || this.workerPool.workers === null) && this.numWorkers > 0) {
+      await this.createWorkerPool(this.numWorkers);
+    }
+    return await this.driver.getTileCanvas(topLeftX, topLeftY, tileWidthInImage, tileHeightInImage, tileResolutionToRender);
   }
 
   /**
@@ -254,26 +286,24 @@ const utils = {
   },
 
   getImageByRatio: async (imagePyramid, tileWidth, tileWidthToRender) => {
-    const tileWidthRatio = Math.floor(tileWidth / tileWidthToRender)
+    const requestedRatio = Math.max(1, tileWidth / Math.max(1, tileWidthToRender))
     const slideImages = imagePyramid.slideImages || await getSlideImagesInPyramid(imagePyramid)
     const imageWidthRatios = imagePyramid.imageWidthRatios || slideImages.map(img => slideImages[0].getWidth() / img.getWidth());
+    const candidates = imageWidthRatios.map((ratio, index) => ({ image: slideImages[index], ratio }))
+    const tiledCandidates = candidates.filter(({ image }) => image.fileDirectory?.TileWidth && image.fileDirectory?.TileLength)
+    const usableCandidates = tiledCandidates.length > 0 ? tiledCandidates : candidates
 
-    // sortedRatios without the thumbnail (last element)
-    const sortedRatios = imageWidthRatios.slice(0, -1);
-
-    if (tileWidthRatio >= sortedRatios[sortedRatios.length - 1]) {
-      return slideImages[sortedRatios.length - 1];
-    }
-    if (tileWidthRatio <= sortedRatios[1]) {
-      return slideImages[0];
-    }
-
-    for (let i = 1; i < sortedRatios.length - 1; i++) {
-      if (tileWidthRatio >= sortedRatios[i] && tileWidthRatio <= sortedRatios[i + 1]) {
-        return slideImages[i];
+    return usableCandidates.reduce((best, candidate) => {
+      const score = Math.abs(Math.log2(candidate.ratio / requestedRatio))
+      const bestScore = Math.abs(Math.log2(best.ratio / requestedRatio))
+      if (score < bestScore - 1e-6) {
+        return candidate
       }
-    }
-    return slideImages[0];
+      if (Math.abs(score - bestScore) <= 1e-6 && candidate.ratio < best.ratio) {
+        return candidate
+      }
+      return best
+    }).image
   },
 
   handleConversion: (data, imageFileDirectory) => {
@@ -435,15 +465,29 @@ const utils = {
     return imageData
   },
 
-  convertToImageBlob: async (data, width, height, imageFileDirectory) => {
+  convertToImageData: async (data, width, height, imageFileDirectory) => {
     const imageData = await utils.handleConversion(data, imageFileDirectory)
+    return new ImageData(imageData, width, height)
+  },
+
+  convertToImageBlob: async (data, width, height, imageFileDirectory) => {
+    const imageData = await utils.convertToImageData(data, width, height, imageFileDirectory)
     const cv = utils.getCanvas(width, height);
     const ctx = cv.getContext("2d")
-    ctx.putImageData(new ImageData(imageData, width, height), 0, 0)
+    ctx.putImageData(imageData, 0, 0)
     return await cv.convertToBlob({
       type: "image/png",
       quality: 1.0,
     })
+  },
+  convertToCanvas: async (data, width, height, imageFileDirectory) => {
+    const imageData = await utils.convertToImageData(data, width, height, imageFileDirectory)
+    const cv = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(width, height);
+    cv.width = width;
+    cv.height = height;
+    const ctx = cv.getContext("2d")
+    ctx.putImageData(imageData, 0, 0)
+    return cv
   },
 
   _canvas: null,
@@ -460,7 +504,15 @@ const utils = {
 
 const setupDecoders = async () => {
   const decodersJSON_URL = new URL("decoders/decoders.json", window.location.href).href
-  return await (await fetch(decodersJSON_URL)).json()
+  try {
+    const response = await fetch(decodersJSON_URL)
+    if (!response.ok) {
+      return {}
+    }
+    return await response.json()
+  } catch {
+    return {}
+  }
 }
 
 export const getImagePyramid = async (imageSource, cache = true) => {
@@ -609,7 +661,7 @@ export const getImageThumbnail = async (imagePyramid, tileParams, pool) => {
 
 }
 
-export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = -1) => {
+const getImageTileRaster = async (imagePyramid, tileParams, pool, imageIndex = -1) => {
   // Get individual tiles from the appropriate image in the pyramid.
 
   if (typeof (imagePyramid?.ifdRequests) !== 'object') {
@@ -672,10 +724,11 @@ export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = 
   if (pool) {
     geotiffParameters['pool'] = pool
   }
-  else if (!isImageDecodableByDefault(imagePyramid)) {
+  else if (!(await isImageDecodableByDefault(optimalImageInTiff))) {
     // Trying to adhere to new GeoTIFF.js changes in addDecoder (preferWorker etc.) because it fails on
     // JPEG-2K compression files. Wrong way to do it. Check commented code at the bottom of decoders_33005.js
     // to see how a start to how it probably should be done (likely still wrong).
+    const imageCompression = await getImageCompression(optimalImageInTiff)
     const decoderForCompression = supportedDecoders?.[imageCompression]
     if (decoderForCompression) {
       await addDecoder(imageCompression, async () => {
@@ -698,8 +751,22 @@ export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = 
 
   const data = await optimalImageInTiff.readRasters(geotiffParameters)
 
-  const imageBlob = await utils.convertToImageBlob(data, tileWidthToRender, tileHeightToRender, optimalImageInTiff.fileDirectory)
-  return imageBlob
+  return {
+    data,
+    width: tileWidthToRender,
+    height: tileHeightToRender,
+    imageFileDirectory: optimalImageInTiff.fileDirectory
+  }
+}
+
+export const getImageTile = async (imagePyramid, tileParams, pool, imageIndex = -1) => {
+  const { data, width, height, imageFileDirectory } = await getImageTileRaster(imagePyramid, tileParams, pool, imageIndex)
+  return await utils.convertToImageBlob(data, width, height, imageFileDirectory)
+}
+
+export const getImageTileCanvas = async (imagePyramid, tileParams, pool, imageIndex = -1) => {
+  const { data, width, height, imageFileDirectory } = await getImageTileRaster(imagePyramid, tileParams, pool, imageIndex)
+  return await utils.convertToCanvas(data, width, height, imageFileDirectory)
 }
 
 export const getImageCompression = async (tiffObjOrImage) => {
@@ -755,10 +822,9 @@ export const createPool = async (tiffImage, numWorkers = 0, supportedDecoders) =
       }
     }
 
-    workerPool = new Pool(Math.min(Math.floor(navigator.hardwareConcurrency / 2), numWorkers), createWorker)
+    const hardwareWorkers = Math.max(1, Math.floor((navigator.hardwareConcurrency || numWorkers) / 2))
+    workerPool = new Pool(Math.min(hardwareWorkers, numWorkers), createWorker)
     workerPool.supportedCompression = imageCompression // Explicitly specify that the current worker pool supports the image's compression scheme.
-
-    await new Promise(res => setTimeout(res, 500)) // Setting up the worker pool is an asynchronous task, give it time to complete before moving on.
   }
   return workerPool
 }

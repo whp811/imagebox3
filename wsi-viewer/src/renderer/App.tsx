@@ -4,6 +4,8 @@ import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
+const THUMBNAIL_WORKERS = 1
+
 function fmtSize(n: number) {
   if (n < 1024) {
     return `${n} B`
@@ -71,6 +73,9 @@ export default function App() {
 
   /** Thumbnail: decode first slide region (lazy, 1 at a time) */
   useEffect(() => {
+    if (wsiUrl) {
+      return
+    }
     let cancelled = false
     const q = slides.filter((s) => !thumbDone.current.has(s.id))
     async function run() {
@@ -82,7 +87,7 @@ export default function App() {
         try {
           const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
           const { default: Imagebox3 } = await import('../wsi/imagebox3.mjs')
-          const ib = new Imagebox3(u, 0)
+          const ib = new Imagebox3(u, THUMBNAIL_WORKERS)
           await ib.init()
           const b = await ib.getThumbnail(128, 128)
           ib.destroyWorkerPool?.()
@@ -103,7 +108,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [slides])
+  }, [slides, wsiUrl])
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">

@@ -53,6 +53,7 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
         }
         const { imagebox3, tileSource } = await buildImagebox3OpenSeadragonTileSource(wsiUrl)
         if (cancelled) {
+          imagebox3.destroyWorkerPool?.()
           return
         }
         imageboxRef.current = imagebox3
@@ -62,8 +63,13 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
           animationTime: 0.15,
           blendTime: 0.05,
           constrainDuringPan: true,
+          drawer: 'canvas',
+          imageLoaderLimit: 5,
+          immediateRender: true,
+          maxImageCacheCount: 300,
           minZoomImageRatio: 0.1,
           maxZoomPixelRatio: 4,
+          timeout: 1000 * 1000,
           showNavigationControl: true,
           prefixUrl: '/osd/images/',
         })
