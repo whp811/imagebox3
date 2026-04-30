@@ -1,11 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw, FolderOpen } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, FolderOpen, RefreshCw, ShieldCheck } from 'lucide-react'
 import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
 const uhnLabsLogoUrl = `${import.meta.env.BASE_URL || './'}logo-Labs.svg`
+
+const noticeSections = [
+  {
+    title: 'Personal Records Only',
+    body: 'These digital images are provided to you as a courtesy for your personal records under the Personal Health Information Protection Act (PHIPA). They are not intended for independent diagnostic use.',
+  },
+  {
+    title: 'Professional Interpretation Required',
+    body: 'Pathology images are highly complex. A definitive diagnosis requires a qualified Pathologist to review the slides in the context of your full clinical history, using medically validated workstations. We strongly advise against attempting to self-diagnose.',
+  },
+  {
+    title: 'Research Use Software',
+    body: 'The OpenSlide™ and OpenSeadragon™ software provided on this drive are open-source tools intended for research and educational viewing. It is not a Health Canada-approved medical device for primary diagnosis.',
+  },
+  {
+    title: 'Privacy Warning',
+    body: 'This thumb drive contains sensitive Personal Health Information (PHI). Please store it in a secure location. If lost or stolen, UHN is not responsible for unauthorized access to the data on this physical media.',
+  },
+]
 
 function slideLabelLines(slide: ScannedSlide) {
   const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
@@ -21,6 +40,99 @@ function slideLabelLines(slide: ScannedSlide) {
   ].filter(Boolean) as string[]
 }
 
+function LegalClinicalNotice({
+  logoUrl,
+  onConfirm,
+  onCancel,
+}: {
+  logoUrl: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const [acknowledged, setAcknowledged] = useState(false)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#f6f8fd] px-4 py-6 text-[#111827]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legal-clinical-notice-title"
+    >
+      <div className="mx-auto h-[calc(100vh-48px)] w-full max-w-[600px]">
+        <section className="flex h-full w-full flex-col overflow-y-auto border border-[#c5ccd9] bg-white px-6 py-5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] sm:px-8">
+          <div className="flex flex-col items-center text-center">
+            <img
+              src={logoUrl}
+              alt="UHN Laboratory Medicine"
+              className="h-auto w-[180px] max-w-full select-none"
+              draggable={false}
+            />
+            <p className="mt-3 text-xs font-bold text-[#050a17]">UHN Laboratory Medicine</p>
+            <h1 id="legal-clinical-notice-title" className="mt-2 text-xs uppercase text-[#7b8caf]">
+              Legal & Clinical Notice
+            </h1>
+          </div>
+
+          <div className="mt-7 flex items-center gap-2 border-b border-[#f2c8c8] pb-3 text-[#c60014]">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <h2 className="text-sm font-bold uppercase">Clinical Access Warning</h2>
+          </div>
+
+          <div className="mt-4 border-l-4 border-[#d5001c] bg-[#eef4ff] px-5 py-5">
+            <div className="space-y-4 text-[13px] leading-5 text-[#252a34]">
+              {noticeSections.map((section) => (
+                <section key={section.title}>
+                  <h3 className="font-bold text-[#080d18]">{section.title}</h3>
+                  <p className="mt-1">{section.body}</p>
+                </section>
+              ))}
+            </div>
+          </div>
+
+          <label className="mt-5 flex cursor-pointer items-start gap-3 text-[13px] leading-5 text-[#1f2937]">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#1d335c]"
+              checked={acknowledged}
+              onChange={(event) => {
+                setAcknowledged(event.currentTarget.checked)
+              }}
+            />
+            <span>I have read and understand the terms of use and professional interpretation requirements for these medical records.</span>
+          </label>
+
+          <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_120px]">
+            <button
+              type="button"
+              className={cn(
+                'inline-flex min-h-11 items-center justify-center gap-3 bg-[#1d335c] px-4 py-2 text-xs font-semibold uppercase text-white transition-colors hover:bg-[#12264b] focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2',
+                !acknowledged && 'cursor-not-allowed opacity-50 hover:bg-[#1d335c]',
+              )}
+              disabled={!acknowledged}
+              onClick={onConfirm}
+            >
+              <span>Confirm and Continue to Viewer</span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center border border-[#c5ccd9] bg-white px-4 py-2 text-xs font-semibold uppercase text-[#111827] transition-colors hover:bg-[#f6f8fd] focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          </div>
+
+          <footer className="mt-auto flex items-center justify-between border-t border-[#e7ebf2] pt-5 text-xs text-[#8393b0]">
+            <ShieldCheck className="h-4 w-4" aria-label="Privacy protected" />
+            <span>Privacy Policy</span>
+          </footer>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [info, setInfo] = useState<SlidesInfo | null>(null)
   const [slides, setSlides] = useState<ScannedSlide[]>([])
@@ -31,6 +143,7 @@ export default function App() {
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
+  const [showLegalNotice, setShowLegalNotice] = useState(true)
   const fallbackThumbDone = useRef<Set<string>>(new Set())
   const embeddedThumbDone = useRef<Set<string>>(new Set())
   const openRequestId = useRef(0)
@@ -55,6 +168,9 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (showLegalNotice) {
+      return
+    }
     if (!window.wsiApi) {
       setErr('wsiApi missing (not running in Electron shell)')
       return
@@ -64,7 +180,7 @@ export default function App() {
       .then(setInfo)
       .catch((e) => setErr(String(e)))
     rescan()
-  }, [rescan])
+  }, [rescan, showLegalNotice])
 
   const openSlide = useCallback(async (sl: ScannedSlide) => {
     const requestId = openRequestId.current + 1
@@ -292,6 +408,17 @@ export default function App() {
           )}
         </main>
       </div>
+      {showLegalNotice && (
+        <LegalClinicalNotice
+          logoUrl={uhnLabsLogoUrl}
+          onConfirm={() => {
+            setShowLegalNotice(false)
+          }}
+          onCancel={() => {
+            window.close()
+          }}
+        />
+      )}
     </div>
   )
 }
