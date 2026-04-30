@@ -34,12 +34,13 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,
-      sandbox: true,
+      sandbox: false,
       preload: join(__dirname, '../preload/index.mjs'),
     },
   })
-  if (import.meta.env.DEV && import.meta.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(import.meta.env.VITE_DEV_SERVER_URL)
+  const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
+  if (!app.isPackaged && rendererDevUrl) {
+    mainWindow.loadURL(rendererDevUrl)
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }

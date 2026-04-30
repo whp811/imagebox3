@@ -1,5 +1,6 @@
 .DS_Store
 .vscode
+graphify-out/
 node_modules
 /package.json
 /package-lock.json

@@ -72,8 +72,8 @@ class OpenSlideDriver {
       this.source = imageSource
     }
 
-    const osUrl = new URL('../wsi-assets/openslide-wasm/openslide.js', import.meta.url)
-    const { default: OpenSlide } = await import(osUrl.href)
+    const osUrl = new URL('wsi-assets/openslide-wasm/openslide.js', window.location.href)
+    const { default: OpenSlide } = await import(/* @vite-ignore */ osUrl.href)
     this.os = new OpenSlide({ workers: this.numWorkers || 5 });
     await this.os.initialize()
     // WARNING: For remote URLs, ensure that openslide-wasm
@@ -538,7 +538,7 @@ const utils = {
 }
 
 const setupDecoders = async () => {
-  const decodersJSON_URL = new URL("/decoders/decoders.json", window.location.origin).href
+  const decodersJSON_URL = new URL("decoders/decoders.json", window.location.href).href
   return await (await fetch(decodersJSON_URL)).json()
 }
 

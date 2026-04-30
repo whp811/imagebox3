@@ -25,8 +25,11 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
     }
     for (const e of entries) {
       const p = join(dir, e.name)
-      if (e.isFile() && isWsiFile(e.name)) {
-        const s = await stat(p)
+      const s = await stat(p).catch(() => null)
+      if (!s) {
+        continue
+      }
+      if (s.isFile() && isWsiFile(e.name)) {
         const rel = relative(root, p)
         out.push({
           id: Buffer.from(p, 'utf8').toString('base64url'),
@@ -36,7 +39,7 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
           ext: extname(e.name).toLowerCase(),
           sizeBytes: s.size,
         })
-      } else if (e.isDirectory()) {
+      } else if (s.isDirectory()) {
         await walk(p)
       }
     }
