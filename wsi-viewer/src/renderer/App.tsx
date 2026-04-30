@@ -207,6 +207,10 @@ export default function App() {
                 const evidenceThumb = s.thumbnailDataUrl
                 const activeThumb = active?.id === s.id && typeof rawThumb === 'string' ? rawThumb : undefined
                 const thumb = activeThumb || evidenceThumb || (rawThumb === null ? null : undefined)
+                const isNdpiEmbeddedThumb = Boolean(activeThumb) && s.ext.toLowerCase() === '.ndpi'
+                const thumbClassName = activeThumb
+                  ? cn('h-full w-full object-cover object-left', isNdpiEmbeddedThumb && 'rotate-90')
+                  : 'h-full w-full object-contain'
                 const labelLines = slideLabelLines(s)
                 const canOpen = !s.unsupportedReason
                 return (
@@ -220,7 +224,7 @@ export default function App() {
                       className={cn(
                         'flex w-full flex-col overflow-hidden rounded-lg border p-2 text-left text-xs transition-colors',
                         active?.id === s.id
-                          ? 'border-foreground/30 bg-background'
+                          ? 'border-amber-500/80 bg-background'
                           : 'border-border hover:bg-background/80',
                         !canOpen && 'opacity-60',
                       )}
@@ -228,7 +232,7 @@ export default function App() {
                       <div className="flex items-start gap-2">
                         <div className="size-14 shrink-0 overflow-hidden rounded bg-background">
                           {typeof thumb === 'string' ? (
-                            <img src={thumb} alt="" className="h-full w-full object-contain" />
+                            <img src={thumb} alt="" className={thumbClassName} />
                           ) : thumb === null ? (
                             <div className="grid h-full w-full place-items-center px-1 text-center text-[8px] font-medium leading-tight text-muted-foreground">
                               <span className="line-clamp-4 whitespace-pre-line break-all" title={labelLines.join('\n')}>{labelLines.join('\n')}</span>
