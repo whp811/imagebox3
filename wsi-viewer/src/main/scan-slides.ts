@@ -143,10 +143,18 @@ function readPathLabelMeta(slidePath: string): SlideLabelMeta {
 }
 
 async function readSlideLabelMeta(path: string): Promise<SlideLabelMeta> {
-  return mergeMeta(
-    mergeMeta(await readWsiLabelMeta(path), await readEvidenceLabelMeta(path)),
-    readPathLabelMeta(path),
-  )
+  const pathMeta = readPathLabelMeta(path)
+  if (pathMeta.specimenId && pathMeta.stain) {
+    return pathMeta
+  }
+
+  const evidenceMeta = await readEvidenceLabelMeta(path)
+  const evidenceOrPathMeta = mergeMeta(evidenceMeta, pathMeta)
+  if (evidenceOrPathMeta.specimenId && evidenceOrPathMeta.stain) {
+    return evidenceOrPathMeta
+  }
+
+  return mergeMeta(await readWsiLabelMeta(path), evidenceOrPathMeta)
 }
 
 /**
@@ -163,11 +171,13 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
     }
     for (const e of entries) {
       const p = join(dir, e.name)
-      const s = await stat(p).catch(() => null)
-      if (!s) {
-        continue
-      }
-      if (s.isFile() && isWsiFile(e.name)) {
+      if (e.isDirectory()) {
+        await walk(p)
+      } else if (e.isFile() && isWsiFile(e.name)) {
+        const s = await stat(p).catch(() => null)
+        if (!s?.isFile()) {
+          continue
+        }
         const rel = relative(root, p)
         const meta = await readSlideLabelMeta(p)
         const fileName = basename(p)
@@ -182,8 +192,6 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
           ext: extname(e.name).toLowerCase(),
           sizeBytes: s.size,
         })
-      } else if (s.isDirectory()) {
-        await walk(p)
       }
     }
   }

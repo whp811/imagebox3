@@ -31,6 +31,7 @@ export default function App() {
   const [slides, setSlides] = useState<ScannedSlide[]>([])
   const [loading, setLoading] = useState(true)
   const [sidebar, setSidebar] = useState(true)
+  const [showSlidesRoot, setShowSlidesRoot] = useState(false)
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -162,9 +163,24 @@ export default function App() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {info && (
-              <p className="mb-2 break-all text-[10px] text-muted-foreground" title={info.slidesRoot}>
-                <FolderOpen className="mb-0.5 inline h-3 w-3" /> {info.slidesRoot}
-              </p>
+              <div className="mb-2">
+                <button
+                  type="button"
+                  className="rounded p-1 text-muted-foreground hover:bg-background"
+                  title={showSlidesRoot ? 'Hide slides folder path' : info.slidesRoot}
+                  aria-label="Toggle slides folder path"
+                  onClick={() => {
+                    setShowSlidesRoot((show) => !show)
+                  }}
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </button>
+                {showSlidesRoot && (
+                  <p className="mt-1 break-all text-[10px] text-muted-foreground" title={info.slidesRoot}>
+                    {info.slidesRoot}
+                  </p>
+                )}
+              </div>
             )}
             {loading && <p className="text-xs text-muted-foreground">Scanning…</p>}
             <ul className="flex flex-col gap-2">
