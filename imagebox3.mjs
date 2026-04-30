@@ -168,12 +168,12 @@ class Imagebox3 {
     this.supportedDecoders = undefined
 
     const srcName = (imageSource instanceof File) ? imageSource.name : imageSource;
-    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff)$/i);
+    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff|ndpi)$/i);
 
     if (!openslideOnly && isTiffOrSVS) {
       this.driver = new GeoTIFFDriver(this.imageSource, this);
     } else {
-      // Fallback to OpenSlide for ndpi, mrxs, vms, etc.
+      // Fallback to OpenSlide for mrxs, vms, etc.
       this.driver = new OpenSlideDriver(this.imageSource, this);
     }
   }

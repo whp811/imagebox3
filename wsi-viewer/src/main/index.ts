@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { registerWsiFileHandler, registerWsiSchemesEarly, toWsiUrl } from './wsi-protocol'
 import { ensureSlidesDir, getApplicationRootDir, getSlidesRootPath } from './slides-root'
 import { scanForSlides } from './scan-slides'
+import { materializeZipEntrySourceForViewing } from './zip-source'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -73,8 +74,9 @@ app.whenReady().then(() => {
   ipcMain.handle('slides:rescan', async () => {
     return scanForSlides(ensureSlidesDir())
   })
-  ipcMain.handle('wsi:pathToUrl', (_e, { absolutePath }: { absolutePath: string }) => {
-    return toWsiUrl(absolutePath)
+  ipcMain.handle('wsi:pathToUrl', async (_e, { absolutePath }: { absolutePath: string }) => {
+    const source = await materializeZipEntrySourceForViewing(absolutePath, app.getPath('userData'))
+    return toWsiUrl(source)
   })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

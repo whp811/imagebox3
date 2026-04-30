@@ -36,8 +36,11 @@ export default function App() {
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [openingSlideId, setOpeningSlideId] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const thumbDone = useRef<Set<string>>(new Set())
+  const openRequestId = useRef(0)
 
   const rescan = useCallback(async () => {
     if (!window.wsiApi) {
@@ -45,6 +48,7 @@ export default function App() {
     }
     setLoading(true)
     setErr(null)
+    setStatus(null)
     try {
       const s = await window.wsiApi.rescan()
       setSlides(s)
@@ -69,12 +73,61 @@ export default function App() {
     rescan()
   }, [rescan])
 
-  const openSlide = useCallback(async (sl: ScannedSlide) => {
-    setErr(null)
-    setActive(sl)
-    const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
-    setWsiUrl(u)
+  const loadEmbeddedLabelThumbnail = useCallback(async (slideId: string, url: string) => {
+    let ib: Imagebox3Instance | null = null
+    try {
+      const { default: Imagebox3 } = await import('../wsi/imagebox3.mjs')
+      const imagebox = new Imagebox3(url, THUMBNAIL_WORKERS) as Imagebox3Instance
+      ib = imagebox
+      await imagebox.init()
+      const b = await imagebox.getEmbeddedLabel?.(128, 128)
+      if (b) {
+        const o = URL.createObjectURL(b)
+        setThumbs((m) => ({ ...m, [slideId]: o }))
+      }
+    } finally {
+      ib?.destroyWorkerPool?.()
+    }
   }, [])
+
+  const openSlide = useCallback(async (sl: ScannedSlide) => {
+    const requestId = openRequestId.current + 1
+    openRequestId.current = requestId
+    setErr(null)
+    setStatus(sl.requiresExtraction ? 'Extracting compressed ZIP slide into cache. First open can take a while.' : null)
+    if (sl.unsupportedReason) {
+      setActive(sl)
+      setWsiUrl(null)
+      setErr(sl.unsupportedReason)
+      setStatus(null)
+      setOpeningSlideId(null)
+      return
+    }
+    setActive(sl)
+    setOpeningSlideId(sl.id)
+    try {
+      const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
+      if (openRequestId.current !== requestId) {
+        return
+      }
+      setWsiUrl(u)
+      setStatus(null)
+      if (sl.requiresExtraction) {
+        void loadEmbeddedLabelThumbnail(sl.id, u).catch(() => undefined)
+      }
+    } catch (e) {
+      if (openRequestId.current !== requestId) {
+        return
+      }
+      setWsiUrl(null)
+      setErr(String(e))
+      setStatus(null)
+    } finally {
+      if (openRequestId.current === requestId) {
+        setOpeningSlideId(null)
+      }
+    }
+  }, [loadEmbeddedLabelThumbnail])
 
   const handleViewerError = useCallback((e: string) => {
     setErr(e)
@@ -90,29 +143,21 @@ export default function App() {
           return
         }
         thumbDone.current.add(sl.id)
-        let ib: Imagebox3Instance | null = null
         try {
+          if (sl.unsupportedReason || sl.requiresExtraction) {
+            setThumbs((m) => ({ ...m, [sl.id]: null }))
+            continue
+          }
           const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
-          const { default: Imagebox3 } = await import('../wsi/imagebox3.mjs')
-          const imagebox = new Imagebox3(u, THUMBNAIL_WORKERS) as Imagebox3Instance
-          ib = imagebox
-          await imagebox.init()
-          const b = await imagebox.getEmbeddedLabel?.(128, 128)
           if (cancelled) {
             return
           }
-          if (b) {
-            const o = URL.createObjectURL(b)
-            setThumbs((m) => ({ ...m, [sl.id]: o }))
-          } else {
-            setThumbs((m) => ({ ...m, [sl.id]: null }))
-          }
+          await loadEmbeddedLabelThumbnail(sl.id, u)
+          setThumbs((m) => (m[sl.id] ? m : { ...m, [sl.id]: null }))
         } catch {
           if (!cancelled) {
             setThumbs((m) => ({ ...m, [sl.id]: null }))
           }
-        } finally {
-          ib?.destroyWorkerPool?.()
         }
         await new Promise((r) => {
           setTimeout(r, 200)
@@ -123,7 +168,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [slides])
+  }, [loadEmbeddedLabelThumbnail, slides])
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
@@ -189,8 +234,10 @@ export default function App() {
             {loading && <p className="text-xs text-muted-foreground">Scanning…</p>}
             <ul className="flex flex-col gap-2">
               {slides.map((s) => {
-                const thumb = thumbs[s.id]
+                const thumb = thumbs[s.id] ?? s.thumbnailDataUrl
                 const labelLines = slideLabelLines(s)
+                const canOpen = !s.unsupportedReason
+                const isOpening = openingSlideId === s.id
                 return (
                   <li key={s.id}>
                     <button
@@ -198,11 +245,13 @@ export default function App() {
                       onClick={() => {
                         void openSlide(s)
                       }}
+                      title={s.unsupportedReason || (s.requiresExtraction ? 'Extracts to cache on first open' : labelLines.join('\n'))}
                       className={cn(
                         'flex w-full flex-col overflow-hidden rounded-lg border p-2 text-left text-xs transition-colors',
                         active?.id === s.id
                           ? 'border-foreground/30 bg-background'
                           : 'border-border hover:bg-background/80',
+                        !canOpen && 'opacity-60',
                       )}
                     >
                       <div className="flex items-start gap-2">
@@ -222,6 +271,8 @@ export default function App() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium" title={labelLines[0]}>{labelLines[0]}</div>
                           {labelLines[1] && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{labelLines[1]}</div>}
+                          {s.requiresExtraction && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{isOpening ? 'Extracting…' : 'ZIP cached on open'}</div>}
+                          {!canOpen && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">Unavailable</div>}
                         </div>
                       </div>
                     </button>
@@ -248,6 +299,7 @@ export default function App() {
         )}
         <main className="relative min-h-0 min-w-0 flex-1 bg-white">
           {err && <div className="absolute left-2 top-2 z-10 max-w-[90%] rounded bg-red-900/90 p-2 text-xs text-white">{err}</div>}
+          {status && !err && <div className="absolute left-2 top-2 z-10 max-w-[90%] rounded bg-zinc-900/85 p-2 text-xs text-white">{status}</div>}
           {wsiUrl ? (
             <WsiOsdView
               wsiUrl={wsiUrl}

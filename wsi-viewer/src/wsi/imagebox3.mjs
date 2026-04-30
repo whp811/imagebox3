@@ -104,12 +104,12 @@ class Imagebox3 {
     this.supportedDecoders = undefined
 
     const srcName = getImageSourceName(imageSource);
-    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff)$/i);
+    const isTiffOrSVS = srcName.match(/\.(tif|tiff|svs|gtiff|ndpi)$/i);
 
     if (isTiffOrSVS) {
       this.driver = new GeoTIFFDriver(this.imageSource, this);
     } else {
-      throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, or .gtiff.`)
+      throw new Error(`Unsupported Imagebox3 source: ${srcName}. Use .svs, .tif, .tiff, .gtiff, or .ndpi.`)
     }
   }
 

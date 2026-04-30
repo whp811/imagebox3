@@ -26,6 +26,7 @@ The **application itself** is a **single native package per platform** (no `win-
 Also on the same volume, **next to** the executable / `.app`, keep:
 
 - **`Slides\`** (or `Slides/`) — put .svs / .ndpi / .tif / … here.
+- **ZIP bundles are supported** under `Slides/`: put the raw WSI and small `Evidence/` folder in one `.zip`. First scan reads only small Evidence text/image files for slide ID, stain, and label thumbnail; it skips raw WSI bytes. Stored/no-compression WSI entries open directly (`zip -0 slide.zip slide.svs metadata.json`). Deflated/compressed WSI entries are extracted on first open into `.wsi-hive-data/zip-cache` and reused while the source ZIP is unchanged.
 - **`.wsi-hive-data\`** — **created on first run** (cache, settings on the drive; dot-prefixed so it is hidden in many file managers; Windows builds also mark it hidden in Explorer).
 
 ```text

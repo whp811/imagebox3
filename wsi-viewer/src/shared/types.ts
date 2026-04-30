@@ -8,6 +8,13 @@ export type ScannedSlide = {
   relativeToSlides: string
   ext: string
   sizeBytes: number
+  sourceType?: 'file' | 'zip'
+  zipPath?: string
+  zipEntry?: string
+  zipCompressionMethod?: number
+  requiresExtraction?: boolean
+  thumbnailDataUrl?: string
+  unsupportedReason?: string
 }
 
 export type SlidesInfo = {

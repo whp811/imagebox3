@@ -8,6 +8,7 @@ Portable **Electron** desktop app: **React** + **Imagebox3** (GeoTIFF + OpenSlid
 
 - Put the app bundle and a sibling folder `Slides` on the same drive (e.g. encrypted USB). **Dev mode** uses `Slides` under the `wsi-viewer` project directory.
 - `Slides` may contain WSI files (`.svs`, `.tif`, `.tiff`, `.ndpi`, `.mrxs`, etc.) in subfolders or at the top level. The app scans recursively.
+- `Slides` may also contain `.zip` bundles. Each ZIP can hold a WSI plus a small `Evidence/` folder. First scan reads only the ZIP directory plus small Evidence text/image sidecars (`.json`, `.xml`, `.txt`, `.csv`, `.tsv`, `.ini`, `.yaml`, `.yml`, `.jpg`, `.png`, `.webp`) to find slide ID, stain, and label thumbnail; it skips the raw WSI bytes. Stored/no-compression WSI entries open directly (`zip -0 slide.zip slide.svs metadata.json`). Deflated/compressed WSI entries are extracted on first open into `.wsi-hive-data/zip-cache` and reused while the source ZIP is unchanged.
 
 ## Commands
 
@@ -22,7 +23,7 @@ npm run dist:usb     # release/WSI-Hive-USB with Windows app + Mac app + Slides
 
 ## How it works
 
-- **Main process** registers `wsi://` **fetch + Range** so `geotiff`/`fromUrl` can read local paths without copying slides out.
+- **Main process** registers `wsi://` **fetch + Range** so `geotiff`/`fromUrl` can read local paths and stored WSI entries inside ZIPs without copying slides out. Compressed WSI entries are transparently materialized into the portable cache before viewing.
 - **Renderer** loads `Imagebox3` + custom **OpenSeadragon** tile source calling `getTile` for each view tile.
 - **OpenSeadragon** control images: copied to `public/osd` via `postinstall`.
 

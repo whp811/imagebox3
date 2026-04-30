@@ -1,8 +1,9 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, posix as pathPosix } from 'node:path'
 import { protocol } from 'electron'
+import { ZIP_STORED, getZipEntryInfo, parseZipEntrySource, readStoredZipEntryRange } from './zip-source'
 
 const SCHEME = 'wsi'
 const PRIVILEGED = [
@@ -31,6 +32,11 @@ function pathFromRequestUrl(requestUrl: string): string {
   const id = (u.pathname || '').replace(/^\//, '') || u.hostname
   if (!id) return ''
   return enc.decode(id)
+}
+
+function displayNameFromSource(source: string): string {
+  const zipSource = parseZipEntrySource(source)
+  return zipSource ? pathPosix.basename(zipSource.entryName) : basename(source)
 }
 
 function parseRange(rangeHeader: string | null, size: number): { start: number, end: number } | null {
@@ -112,6 +118,29 @@ export function registerWsiFileHandler() {
     if (request.method === 'HEAD') {
       const abs = pathFromRequestUrl(request.url)
       if (!abs) return new Response(null, { status: 400 })
+      const zipSource = parseZipEntrySource(abs)
+      if (zipSource) {
+        const entry = await getZipEntryInfo(zipSource.zipPath, zipSource.entryName)
+        if (!entry) return new Response(null, { status: 404 })
+        if (entry.encrypted || entry.compressionMethod !== ZIP_STORED) {
+          return new Response(null, {
+            status: 415,
+            headers: {
+              'content-type': 'text/plain',
+              'access-control-allow-origin': '*',
+            },
+          })
+        }
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-length': String(entry.uncompressedSize),
+            'content-type': 'application/octet-stream',
+            'accept-ranges': 'bytes',
+            'access-control-allow-origin': '*',
+          },
+        })
+      }
       const st = await stat(abs)
       if (!st.isFile()) return new Response(null, { status: 400 })
       return new Response(null, {
@@ -120,6 +149,7 @@ export function registerWsiFileHandler() {
           'content-length': String(st.size),
           'content-type': 'application/octet-stream',
           'accept-ranges': 'bytes',
+          'access-control-allow-origin': '*',
         },
       })
     }
@@ -129,6 +159,58 @@ export function registerWsiFileHandler() {
     const abs = pathFromRequestUrl(request.url)
     if (!abs) {
       return new Response('Bad wsi:// URL', { status: 400 })
+    }
+    const zipSource = parseZipEntrySource(abs)
+    if (zipSource) {
+      const entry = await getZipEntryInfo(zipSource.zipPath, zipSource.entryName)
+      if (!entry) {
+        return new Response('ZIP entry not found', { status: 404 })
+      }
+      if (entry.encrypted) {
+        return new Response('ZIP slide entry is encrypted', { status: 415 })
+      }
+      if (entry.compressionMethod !== ZIP_STORED) {
+        return new Response('ZIP slide entry is compressed; rebuild the ZIP with store/no-compression mode', { status: 415 })
+      }
+
+      const fileSize = entry.uncompressedSize
+      const r = request.headers.get('range')
+      const pr = parseRange(r, fileSize)
+      if (!pr) {
+        if (fileSize > MAX_FULL_FILE_BYTES) {
+          return new Response('Range header required for WSI files', {
+            status: 416,
+            headers: {
+              'content-type': 'text/plain',
+              'content-range': `bytes */${fileSize}`,
+              'accept-ranges': 'bytes',
+              'access-control-allow-origin': '*',
+            },
+          })
+        }
+        const data = await readStoredZipEntryRange(zipSource.zipPath, zipSource.entryName, 0, fileSize - 1)
+        return new Response(new Uint8Array(data), {
+          status: 200,
+          headers: {
+            'content-length': String(data.length),
+            'content-type': 'application/octet-stream',
+            'accept-ranges': 'bytes',
+            'access-control-allow-origin': '*',
+          },
+        })
+      }
+      const { start, end } = pr
+      const data = await readStoredZipEntryRange(zipSource.zipPath, zipSource.entryName, start, end)
+      return new Response(new Uint8Array(data), {
+        status: 206,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-length': String(data.length),
+          'content-range': `bytes ${start}-${end}/${fileSize}`,
+          'accept-ranges': 'bytes',
+          'access-control-allow-origin': '*',
+        },
+      })
     }
     const st = await stat(abs)
     if (!st.isFile()) {
@@ -186,6 +268,6 @@ export function registerWsiFileHandler() {
 }
 
 export function toWsiUrl(absoluteFilePath: string): string {
-  const name = encodeURIComponent(basename(absoluteFilePath))
+  const name = encodeURIComponent(displayNameFromSource(absoluteFilePath))
   return `${SCHEME}://local/${enc.encode(absoluteFilePath)}?name=${name}`
 }
