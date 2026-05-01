@@ -9,21 +9,22 @@
 
 ## Folder layout on the stick
 
-The **production Mac + Windows handout** uses exactly three root items:
+The **production Mac + Windows handout** is built so the normal patient view stays quiet.
 
 ```text
 USB root/
   Start Here.html
-  WSI-Hive-Windows.exe
-  WSI Hive.app
   Slides/
+  WSI Hive.app        ← visible on Mac, hidden on Windows
+  WSI Hive.exe        ← visible on Windows, hidden on Mac
+  .wsi-hive/          ← hidden support folder
 ```
 
-`Start Here.html` is the user-facing guide. It includes launch links, screenshots, security-warning help, troubleshooting, FAQs, flash-drive care instructions, legal/clinical warnings, and UHN Laboratory Medicine Program contact information.
+`Start Here.html` is the user-facing guide. It includes launch links, screenshots, security-warning help, troubleshooting, FAQs, flash-drive care instructions, legal/clinical warnings, and UHN Laboratory Medicine Program contact information. Its Windows and Mac buttons call small launchers stored inside `.wsi-hive/`, which then open the matching app at the USB root.
 
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 
-- **Windows:** one portable `.exe` (`WSI-Hive-Windows.exe` in `release/WSI-Hive-USB/`). All app resources are **inside** that file; the OS may use `%TEMP%` for extraction while running — that is outside your USB, not a second “app folder” you ship.
+- **Windows:** one portable `.exe` (`WSI Hive.exe` in `release/WSI-Hive-USB/`). All app resources are **inside** that file; the OS may use `%TEMP%` for extraction while running — that is outside your USB, not a second “app folder” you ship.
 - **macOS:** one `WSI Hive.app` **bundle** — in Finder it looks like **a single app icon** (a package folder under the hood).
 
 Also on the same volume, **next to** the executable / `.app`, keep:
@@ -34,9 +35,11 @@ Also on the same volume, **next to** the executable / `.app`, keep:
 
 ```text
 E:\
-  WSI-Hive-Windows.exe
-  WSI Hive.app
+  Start Here.html
   Slides\           ← your slide files
+  WSI Hive.exe      ← visible on Windows
+  WSI Hive.app      ← hidden on Windows
+  .wsi-hive\        ← hidden support folder
   .wsi-hive-data\  ← first-run (optional to hide on Windows; see above)
 ```
 
@@ -53,8 +56,8 @@ E:\
 
 ## “Click to run”
 
-- **Windows:** double-click **WSI-Hive-Windows.exe**.
-- **macOS:** double-click **WSI Hive.app**.
+- **Windows:** click **Open WSI Hive for Windows** in `Start Here.html`, or double-click **WSI Hive.exe**.
+- **macOS:** click **Open WSI Hive for Mac** in `Start Here.html`, or double-click **WSI Hive.app**.
 - **Linux:** run the `AppImage` (you may need `chmod +x` on Linux-native filesystems; on FAT32 USB, use the provided shell launcher if we ship one, or see `packaging/universal/PACK.md`).
 
 ## If something writes outside the drive
@@ -66,3 +69,5 @@ E:\
 ## Building the copy that goes on the stick
 
 On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.
+
+The assembler applies macOS hidden flags to `WSI Hive.exe` and `.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `.wsi-hive/` when the build/finalization step runs on Windows. The hidden launchers also re-apply those flags on first run.
