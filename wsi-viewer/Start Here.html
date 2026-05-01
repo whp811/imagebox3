@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WSI Hive Guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: oklch(0.985 0.004 255);
+      --surface: oklch(0.998 0.003 255);
+      --soft: oklch(0.955 0.009 255);
+      --soft-red: oklch(0.991 0.004 25);
+      --soft-blue: oklch(0.955 0.018 255);
+      --ink: oklch(0.245 0.026 255);
+      --text: oklch(0.315 0.024 255);
+      --muted: oklch(0.46 0.026 255);
+      --quiet: oklch(0.58 0.02 255);
+      --line: oklch(0.86 0.014 255);
+      --blue: oklch(0.31 0.083 255);
+      --blue-strong: oklch(0.25 0.088 255);
+      --red: oklch(0.76 0.035 25);
+      --red-strong: oklch(0.42 0.115 25);
+      --focus: oklch(0.62 0.16 250);
+      --shadow: 0 10px 26px oklch(0.245 0.026 255 / 0.08);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 18px;
+      line-height: 1.58;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--text);
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+
+    p,
+    li {
+      max-width: 72ch;
+    }
+
+    .page {
+      width: min(100% - 32px, 1040px);
+      margin: 0 auto;
+    }
+
+    .topbar {
+      background: oklch(0.95 0 0);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 22px 0;
+    }
+
+    .brand-logo {
+      display: block;
+      width: min(360px, 100%);
+      height: auto;
+    }
+
+    .hero {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 34px;
+      align-items: start;
+      padding: 34px 0 36px;
+    }
+
+    .app-preview {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .app-preview img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .start-panel {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .start-panel h2 {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    .start-panel p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .launch-note {
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+
+    .inline-leaf {
+      width: 18px;
+      height: 18px;
+      margin: 0 3px;
+      vertical-align: -2px;
+    }
+
+    .launch-group {
+      display: grid;
+      gap: 16px;
+    }
+
+    .launcher {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .launcher h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 1.05rem;
+    }
+
+    .platform-icon {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      display: block;
+      object-fit: contain;
+    }
+
+    .button-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-width: 0;
+      min-height: 54px;
+      padding: 13px 16px;
+      border: 2px solid var(--blue);
+      border-radius: 6px;
+      background: var(--blue);
+      color: var(--surface);
+      font-weight: 800;
+      text-align: center;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    .helper {
+      margin: 14px 0 0;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .toc {
+      margin: 24px auto;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .toc h2 {
+      margin: 0 0 12px;
+      color: var(--ink);
+      font-size: 1.05rem;
+    }
+
+    .toc ol {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 22px;
+      margin: 0;
+      padding-left: 1.35rem;
+    }
+
+    main {
+      padding-bottom: 56px;
+    }
+
+    section {
+      margin-top: 22px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    section h2 {
+      margin: 0 0 16px;
+      color: var(--ink);
+      font-size: 1.65rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin: 24px 0 8px;
+      color: var(--ink);
+      font-size: 1.16rem;
+      line-height: 1.28;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ol,
+    ul {
+      margin: 10px 0 0;
+      padding-left: 1.45rem;
+    }
+
+    li {
+      margin: 9px 0;
+      padding-left: 4px;
+    }
+
+    strong {
+      color: var(--ink);
+    }
+
+    code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--soft);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 0.95em;
+      font-weight: 700;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .notice {
+      padding: 20px;
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      background: var(--soft-red);
+      box-shadow: 0 1px 3px oklch(0.245 0.026 255 / 0.04);
+    }
+
+    .notice h3 {
+      margin-top: 0;
+      color: var(--red-strong);
+    }
+
+    .notice p:last-child {
+      margin-bottom: 0;
+    }
+
+    .plain-box {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .plain-box h3:first-child {
+      margin-top: 0;
+    }
+
+    .usage-guide-image {
+      margin-top: 18px;
+    }
+
+    .usage-guide-image img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    figure {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      overflow: hidden;
+    }
+
+    .screenshot-space {
+      min-height: 230px;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      color: var(--quiet);
+      text-align: center;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    figcaption {
+      padding: 13px 15px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+      padding: 14px 0;
+    }
+
+    details:first-of-type {
+      border-top: 0;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    details p,
+    details ul,
+    details ol {
+      margin-top: 10px;
+    }
+
+    .contact-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 14px 0 18px;
+    }
+
+    .contact-list div {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .contact-list h3 {
+      margin-top: 0;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    @media (max-width: 820px) {
+      .hero-grid,
+      .two-col,
+      .screenshot-grid,
+      .contact-list {
+        grid-template-columns: 1fr;
+      }
+
+      .toc ol {
+        grid-template-columns: 1fr;
+      }
+
+    }
+
+    @media (max-width: 520px) {
+      :root {
+        font-size: 17px;
+      }
+
+      .page {
+        width: min(calc(100% - 20px), 360px);
+      }
+
+      .brand {
+        align-items: center;
+      }
+
+      .hero-grid {
+        padding-top: 24px;
+      }
+
+      .start-panel,
+      .launcher,
+      .plain-box,
+      .notice {
+        min-width: 0;
+      }
+
+      section {
+        padding: 20px;
+      }
+
+      .button {
+        min-height: 58px;
+      }
+
+      .launch-note {
+        white-space: normal;
+      }
+    }
+
+    @media print {
+      html {
+        scroll-behavior: auto;
+      }
+
+      body {
+        background: var(--surface);
+      }
+
+      .page {
+        width: 100%;
+      }
+
+      .start-panel,
+      section,
+      .toc {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+
+      .button {
+        border-color: var(--ink);
+        background: var(--surface);
+        color: var(--ink);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="page brand" aria-label="University Health Network Laboratory Medicine Program">
+      <img class="brand-logo" src="start-here-assets/uhn-laboratory-medicine.svg" alt="UHN Laboratory Medicine">
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="page hero-grid">
+      <figure class="app-preview">
+        <img src="start-here-assets/wsi-hive-preview.png" alt="WSI Hive app showing the slide list and image viewer, with specimen identifiers obscured">
+      </figure>
+
+      <aside class="start-panel" aria-labelledby="quick-start-title">
+        <h2 id="quick-start-title">Open the app</h2>
+        <p class="launch-note">If a button does not work,<br>double-click <img class="inline-leaf" src="start-here-assets/uhn-leaf.png" alt="UHN leaf"> icon on the flash drive.</p>
+
+        <div class="launch-group">
+          <div class="launcher">
+            <div class="button-row">
+              <a class="button" href="WSI-Hive-Windows.bat">
+                <span>Open WSI Hive for Windows</span>
+                <img class="platform-icon" src="start-here-assets/platform-windows.svg" alt="" aria-hidden="true">
+              </a>
+            </div>
+          </div>
+
+          <div class="launcher">
+            <div class="button-row">
+              <a class="button" href="WSI-Hive-macOS.command">
+                <span>Open WSI Hive for Mac</span>
+                <img class="platform-icon" src="start-here-assets/platform-mac.svg" alt="" aria-hidden="true">
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <p class="helper">Your computer may ask if you trust this app. This can happen with apps on flash drives. Only continue if this drive came from UHN or another trusted source.</p>
+      </aside>
+    </div>
+  </header>
+
+  <nav class="page toc" aria-labelledby="contents-title">
+    <h2 id="contents-title">On this page</h2>
+    <ol>
+      <li><a href="#before">Before You Start</a></li>
+      <li><a href="#run">How to Open WSI Hive</a></li>
+      <li><a href="#use">How to Use WSI Hive</a></li>
+      <li><a href="#warning">Important Medical and Privacy Notice</a></li>
+      <li><a href="#care">How to Care for the Flash Drive</a></li>
+      <li><a href="#help">If You Need Help</a></li>
+      <li><a href="#contact">Contact UHN</a></li>
+    </ol>
+  </nav>
+
+  <main class="page">
+    <section id="before" aria-labelledby="before-title">
+      <h2 id="before-title">Before You Start</h2>
+      <div class="two-col">
+        <div class="plain-box">
+          <h3>What is on the flash drive?</h3>
+          <ul>
+            <li>WSI Hive for Windows.</li>
+            <li>WSI Hive for Mac.</li>
+            <li>A folder called <code>Slides</code>, if slide files are included.</li>
+            <li>This guide.</li>
+          </ul>
+          <p class="small">Some folders may be hidden. That is normal. Please do not move, rename, or delete files.</p>
+        </div>
+
+        <div class="plain-box">
+          <h3>Computer requirements</h3>
+          <ul>
+            <li>Windows 10 or Windows 11.</li>
+            <li>macOS 11 Big Sur or newer.</li>
+            <li>Permission to open an app from a flash drive.</li>
+          </ul>
+          <p class="small">Older computers or older USB ports may run more slowly with large slide files.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="run" aria-labelledby="run-title">
+      <h2 id="run-title">How to Open WSI Hive</h2>
+
+      <h3>Windows steps</h3>
+      <ol>
+        <li>Put the flash drive into your computer.</li>
+        <li>Open <strong>File Explorer</strong>.</li>
+        <li>Click the flash drive name.</li>
+        <li>Open this guide, if it is not already open.</li>
+        <li>Click <strong>Open WSI Hive for Windows</strong>.</li>
+        <li>If that does not work, double-click <strong>WSI-Hive-Windows.bat</strong> or <strong>WSI-Hive-Windows.exe</strong> on the flash drive.</li>
+      </ol>
+
+      <details>
+        <summary>If Windows shows a security message</summary>
+        <ol>
+          <li>Check that the flash drive came from UHN or another trusted source.</li>
+          <li>If you see <strong>Windows protected your PC</strong>, click <strong>More info</strong>.</li>
+          <li>Click <strong>Run anyway</strong>, if your computer allows it.</li>
+          <li>If your workplace or antivirus software blocks the app, ask your IT team or contact UHN.</li>
+        </ol>
+      </details>
+
+      <h3>Mac steps</h3>
+      <ol>
+        <li>Put the flash drive into your Mac.</li>
+        <li>Open <strong>Finder</strong>.</li>
+        <li>Click the flash drive name.</li>
+        <li>Open this guide, if it is not already open.</li>
+        <li>Click <strong>Open WSI Hive for Mac</strong>.</li>
+        <li>If that does not work, double-click <strong>WSI-Hive-macOS.command</strong> or <strong>WSI Hive.app</strong> on the flash drive.</li>
+      </ol>
+
+      <details>
+        <summary>If your Mac says the app cannot be opened</summary>
+        <ol>
+          <li>Check that the flash drive came from UHN or another trusted source.</li>
+          <li>In Finder, hold the <strong>Control</strong> key and click the app or command file.</li>
+          <li>Click <strong>Open</strong>.</li>
+          <li>If asked again, click <strong>Open</strong>.</li>
+          <li>If your Mac is managed by an organization, you may need help from your IT team.</li>
+        </ol>
+      </details>
+    </section>
+
+    <section id="use" aria-labelledby="use-title">
+      <h2 id="use-title">How to Use WSI Hive</h2>
+      <ol>
+        <li>When WSI Hive opens, read the notice on the screen.</li>
+        <li>If you understand the notice, check the box and click <strong>Confirm and Continue to Viewer</strong>.</li>
+        <li>The app will look for slides in the <code>Slides</code> folder on this flash drive.</li>
+        <li>Click a slide in the list on the left side.</li>
+        <li>Use your mouse wheel or trackpad to zoom in and out.</li>
+        <li>Click and drag the slide image to move around.</li>
+      </ol>
+
+      <figure class="usage-guide-image">
+        <img src="start-here-assets/how-to-use-cards.png" alt="Two WSI Hive instructions: pick a slide thumbnail in the sidebar, then inspect the tissue by zooming and dragging.">
+      </figure>
+
+      <div class="notice">
+        <h3>If you do not see any slides</h3>
+        <p>Click <strong>Rescan</strong> in the app. If slides still do not appear, do not move files or create new folders. Contact UHN for help.</p>
+      </div>
+
+      <h3>If you need to find the slide folder</h3>
+      <p>The slide folder is usually called <code>Slides</code> and is on the flash drive. Some versions of the drive may hide this folder. That is okay. Please do not rename it or move it.</p>
+    </section>
+
+    <section id="warning" aria-labelledby="warning-title">
+      <h2 id="warning-title">Important Medical and Privacy Notice</h2>
+
+      <div class="notice">
+        <h3>Personal Records Only</h3>
+        <p>These digital images are provided to you as a courtesy for your personal records under the Personal Health Information Protection Act (PHIPA). They are not intended for independent diagnostic use.</p>
+
+        <h3>Professional Interpretation Required</h3>
+        <p>Pathology images are highly complex. A definitive diagnosis requires a qualified Pathologist to review the slides in the context of your full clinical history, using medically validated workstations. We strongly advise against attempting to self-diagnose.</p>
+
+        <h3>Research Use Software</h3>
+        <p>The OpenSlide™ and OpenSeadragon™ software provided on this drive are open-source tools intended for research and educational viewing. It is not a Health Canada-approved medical device for primary diagnosis.</p>
+
+        <h3>Privacy Warning</h3>
+        <p>This thumb drive contains sensitive Personal Health Information (PHI). Please store it in a secure location. If lost or stolen, UHN is not responsible for unauthorized access to the data on this physical media.</p>
+      </div>
+    </section>
+
+    <section id="care" aria-labelledby="care-title">
+      <h2 id="care-title">How to Care for the Flash Drive</h2>
+      <ul>
+        <li>Do not delete, rename, or move files unless UHN tells you to.</li>
+        <li>Do not format the flash drive.</li>
+        <li>Do not remove the flash drive while WSI Hive is open.</li>
+        <li>Close WSI Hive before removing the flash drive.</li>
+        <li>Safely eject the flash drive before taking it out. On Windows, right-click the drive and choose <strong>Eject</strong>. On a Mac, click the eject button beside the drive name in Finder.</li>
+        <li>Keep the flash drive in a secure place.</li>
+      </ul>
+    </section>
+
+    <section id="help" aria-labelledby="help-title">
+      <h2 id="help-title">If You Need Help</h2>
+
+      <details open>
+        <summary>The app does not open</summary>
+        <ol>
+          <li>Make sure you clicked the button for your computer, Windows or Mac.</li>
+          <li>Try double-clicking the app file directly on the flash drive.</li>
+          <li>Restart the computer and try again.</li>
+          <li>If it still does not open, contact UHN.</li>
+        </ol>
+      </details>
+
+      <details>
+        <summary>A security warning appears</summary>
+        <p>This can happen with apps on flash drives. Only continue if the drive came from UHN or another trusted source. If the computer belongs to your workplace, your IT team may need to help.</p>
+      </details>
+
+      <details>
+        <summary>I cannot find the Slides folder</summary>
+        <p>The folder may be hidden. Do not create a new folder or move files. Contact UHN if the app cannot find your slides.</p>
+      </details>
+
+      <details>
+        <summary>The app is slow</summary>
+        <ul>
+          <li>Large slide files can take time to load.</li>
+          <li>Use a USB 3.0 or USB-C port if you have one.</li>
+          <li>Close other programs you are not using.</li>
+          <li>Wait a few moments before zooming again.</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary>The flash drive is not detected</summary>
+        <ol>
+          <li>Try another USB port.</li>
+          <li>Try another trusted computer, if one is available.</li>
+          <li>Do not format the drive.</li>
+          <li>Contact UHN.</li>
+        </ol>
+      </details>
+
+      <h3>Common questions</h3>
+      <details>
+        <summary>Can I copy the app to my computer?</summary>
+        <p>Please use the app from the flash drive unless UHN tells you otherwise. Copying files may create privacy or version problems.</p>
+      </details>
+
+      <details>
+        <summary>Can I delete the Slides folder?</summary>
+        <p>No. The app needs the slide files in that folder.</p>
+      </details>
+
+      <details>
+        <summary>Can I use this on both Windows and Mac?</summary>
+        <p>Yes, if both app versions are included on the flash drive. Use the Windows file on a Windows computer and the Mac file on a Mac.</p>
+      </details>
+    </section>
+
+    <section id="contact" aria-labelledby="contact-title">
+      <h2 id="contact-title">Contact UHN</h2>
+      <p>If you need help, contact the UHN Laboratory Medicine Program.</p>
+
+      <div class="contact-list">
+        <div>
+          <h3>Email</h3>
+          <p><a href="mailto:LMP.Communications@uhn.ca">LMP.Communications@uhn.ca</a></p>
+        </div>
+        <div>
+          <h3>Phone</h3>
+          <p>416-340-4800 ext. LABS (5227)<br>Toll-free: 1-866-865-LABS (5227)</p>
+        </div>
+      </div>
+
+      <h3>When you ask for help, please include:</h3>
+      <ul>
+        <li>Whether you are using Windows or Mac.</li>
+        <li>The message you see on the screen, if there is one.</li>
+        <li>The flash drive label or version, if you can find it.</li>
+        <li>Whether the <code>Slides</code> folder is visible.</li>
+      </ul>
+    </section>
+
+  </main>
+</body>
+</html>

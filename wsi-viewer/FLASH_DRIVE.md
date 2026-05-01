@@ -13,10 +13,13 @@ The **production Mac + Windows handout** uses exactly three root items:
 
 ```text
 USB root/
+  Start Here.html
   WSI-Hive-Windows.exe
   WSI Hive.app
   Slides/
 ```
+
+`Start Here.html` is the user-facing guide. It includes launch links, screenshots, security-warning help, troubleshooting, FAQs, flash-drive care instructions, legal/clinical warnings, and UHN Laboratory Medicine Program contact information.
 
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 

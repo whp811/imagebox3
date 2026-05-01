@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Create the clean USB handout:
+#   Start Here.html
+#   start-here-assets/
 #   WSI-Hive-Windows.exe
 #   WSI Hive.app
 #   Slides/
@@ -47,6 +49,14 @@ fi
 
 rm -rf "$OUT"
 mkdir -p "$OUT/Slides"
+
+if [ -f "$ROOT/Start Here.html" ]; then
+  cp -f "$ROOT/Start Here.html" "$OUT/"
+fi
+
+if [ -d "$ROOT/start-here-assets" ]; then
+  cp -R "$ROOT/start-here-assets" "$OUT/"
+fi
 
 if [ -d "$ROOT/Slides" ]; then
   cp -R "$ROOT/Slides/." "$OUT/Slides/" 2>/dev/null || true

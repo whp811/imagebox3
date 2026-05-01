@@ -14,6 +14,7 @@ After `npm run dist` in `wsi-viewer/`, `electron-builder` writes to `wsi-viewer/
 
 | Root (end user) | |
 |-----------------|---|
+| **Start Here.html** | User guide with launch links, screenshots, security-warning help, troubleshooting, FAQs, and support contact information. |
 | **WSI-Hive-Windows.bat** | Starts the Windows portable under `.wsi-usb\win\`. On success, hides the whole **.wsi-usb** in Explorer. |
 | **WSI-Hive-macOS.command** | Opens the `.app` under `.wsi-usb/mac/…`. On success, hides **.wsi-usb** in Finder when possible. |
 | **WSI-Hive-Linux.sh** | Runs the AppImage in `.wsi-usb/linux/`. |

@@ -2,8 +2,9 @@
 # After building on each platform (or copying CI artifacts), create a single folder
 # you can zip for end users. Run from wsi-viewer/ :  ./scripts/assemble-universal-bundle.sh
 #
-# Layout: at the root, only the three OS starters, Slides/, this README, PACK.md, and
-# a single hidden (after first run) .wsi-usb/ tree with win/, mac/, linux/ payloads.
+# Layout: at the root, Start Here.html, start-here-assets/, the three OS
+# starters, Slides/, this README, PACK.md, and a single hidden (after first run)
+# .wsi-usb/ tree with win/, mac/, linux/ payloads.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/dist"
@@ -18,6 +19,9 @@ fi
 mkdir -p "$OUT"
 cp -f "$PACK/README.txt" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/PACK.md" "$OUT/" 2>/dev/null || true
+cp -f "$ROOT/Start Here.html" "$OUT/" 2>/dev/null || true
+rm -rf "$OUT/start-here-assets"
+cp -R "$ROOT/start-here-assets" "$OUT/start-here-assets" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-Windows.bat" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-macOS.command" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-Linux.sh" "$OUT/" 2>/dev/null || true

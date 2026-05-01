@@ -74,15 +74,14 @@ function LegalClinicalNotice({
       aria-labelledby="legal-clinical-notice-title"
     >
       <div className="mx-auto h-screen w-full max-w-[600px]">
-        <section className="flex h-full w-full flex-col overflow-y-auto border-x border-[#c5ccd9] bg-white px-6 py-5 sm:px-8">
+        <section className="flex h-full w-full flex-col overflow-y-auto border-x border-[#c5ccd9] bg-white px-6 pb-5 pt-9 sm:px-8 sm:pt-10">
           <div className="flex flex-col items-center text-center">
             <img
               src={logoUrl}
               alt="UHN Laboratory Medicine"
-              className="h-auto w-[180px] max-w-full select-none"
+              className="h-auto w-[220px] max-w-full select-none"
               draggable={false}
             />
-            <p className="mt-3 text-xs font-bold text-[#050a17]">UHN Laboratory Medicine</p>
             <h1 id="legal-clinical-notice-title" className="mt-2 text-xs uppercase text-[#7b8caf]">
               Legal & Clinical Notice
             </h1>
@@ -90,7 +89,7 @@ function LegalClinicalNotice({
 
           <div className="mt-7 flex items-center gap-2 border-b border-[#f2c8c8] pb-3 text-[#c60014]">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <h2 className="text-sm font-bold uppercase">Clinical Access Warning</h2>
+            <h2 className="text-sm font-bold uppercase">LEGAL AND CLINICAL ACCESS WARNING</h2>
           </div>
 
           <div className="mt-4 border-l-4 border-[#d5001c] bg-[#eef4ff] px-5 py-5">
@@ -511,7 +510,7 @@ export default function App() {
                 draggable={false}
                 aria-hidden="true"
               />
-              <div className="text-[rgb(0_0_0_/_0.12)]">Select a slide in the sidebar</div>
+              <div className="text-[rgb(0_0_0_/_0.28)]">Select a slide in the sidebar</div>
             </div>
           )}
         </main>
