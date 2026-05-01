@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, FolderOpen, RefreshCw, ShieldCheck } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  FolderOpen,
+  Hand,
+  MousePointer2,
+  PanelLeft,
+  RefreshCw,
+  ScanSearch,
+  ShieldCheck,
+  X,
+  ZoomIn,
+} from 'lucide-react'
 import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
@@ -53,13 +68,13 @@ function LegalClinicalNotice({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-[#f6f8fd] px-4 py-6 text-[#111827]"
+      className="fixed inset-0 z-50 bg-white text-[#111827]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="legal-clinical-notice-title"
     >
-      <div className="mx-auto h-[calc(100vh-48px)] w-full max-w-[600px]">
-        <section className="flex h-full w-full flex-col overflow-y-auto border border-[#c5ccd9] bg-white px-6 py-5 shadow-[0_8px_28px_rgba(15,23,42,0.14)] sm:px-8">
+      <div className="mx-auto h-screen w-full max-w-[600px]">
+        <section className="flex h-full w-full flex-col overflow-y-auto border-x border-[#c5ccd9] bg-white px-6 py-5 sm:px-8">
           <div className="flex flex-col items-center text-center">
             <img
               src={logoUrl}
@@ -133,6 +148,80 @@ function LegalClinicalNotice({
   )
 }
 
+function UsageGuide({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/45 px-4 py-6 text-[#111827]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="usage-guide-title"
+    >
+      <section className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-[#c5ccd9] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.22)]">
+        <header className="flex shrink-0 items-center gap-3 border-b border-[#e4e8f0] px-5 py-4">
+          <CircleHelp className="h-5 w-5 shrink-0 text-[#1d335c]" aria-hidden="true" />
+          <div className="min-w-0">
+            <h2 id="usage-guide-title" className="text-sm font-bold">How to use WSI Hive</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Select, then inspect your whole-slide images.</p>
+          </div>
+          <button
+            type="button"
+            className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2"
+            aria-label="Close how to use guide"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="min-h-0 overflow-y-auto p-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="rounded-lg border border-[#cfd8e2] bg-[#f2f5f8] p-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#1d335c]">
+                <PanelLeft className="h-4 w-4" aria-hidden="true" />
+                Pick a Slide
+              </div>
+              <div className="mt-4 grid min-h-32 grid-cols-[72px_1fr] overflow-hidden rounded-md border border-[#d8deea] bg-white">
+                <div className="space-y-2 border-r border-[#e4e8f0] p-2">
+                  <div className="rounded border border-amber-500/80 bg-[#fff8e6] p-1">
+                    <div className="h-8 rounded bg-[#c9d9ee]" />
+                    <div className="mt-1 h-1.5 rounded bg-[#1d335c]" />
+                  </div>
+                  <div className="rounded border border-[#d8deea] p-1">
+                    <div className="h-8 rounded bg-[#d8e5cd]" />
+                  </div>
+                </div>
+                <div className="grid place-items-center bg-white">
+                  <MousePointer2 className="h-10 w-10 text-[#1d335c]" aria-hidden="true" />
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#4b5563]">Choose a slide thumbnail in the sidebar to open it in the viewer.</p>
+            </section>
+
+            <section className="rounded-lg border border-[#cfd8e2] bg-[#f2f5f8] p-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#1d335c]">
+                <ScanSearch className="h-4 w-4" aria-hidden="true" />
+                Inspect
+              </div>
+              <div className="mt-4 rounded-md border border-[#d8deea] bg-white p-3">
+                <div className="relative h-28 overflow-hidden rounded bg-[#f7f7f5]">
+                  <div className="absolute left-5 top-4 h-16 w-28 rotate-[-8deg] rounded-full border-4 border-[#c9d9ee] bg-[#fff8e6]" />
+                  <div className="absolute bottom-4 right-5 h-12 w-20 rotate-[10deg] rounded-full border-4 border-[#d8e5cd] bg-[#f7d7b9]" />
+                  <div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1d335c] bg-white/70" />
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-3 text-[#1d335c]">
+                  <ZoomIn className="h-5 w-5" aria-label="Zoom" />
+                  <Hand className="h-5 w-5" aria-label="Pan" />
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#4b5563]">Scroll to zoom. Drag to pan across the tissue. Use full screen for more room.</p>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function App() {
   const [info, setInfo] = useState<SlidesInfo | null>(null)
   const [slides, setSlides] = useState<ScannedSlide[]>([])
@@ -144,6 +233,7 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [showLegalNotice, setShowLegalNotice] = useState(true)
+  const [showUsageGuide, setShowUsageGuide] = useState(false)
   const fallbackThumbDone = useRef<Set<string>>(new Set())
   const embeddedThumbDone = useRef<Set<string>>(new Set())
   const openRequestId = useRef(0)
@@ -265,7 +355,18 @@ export default function App() {
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-8 items-center rounded-md border border-border bg-card px-2 text-xs"
+            className="inline-flex h-8 items-center rounded-md border border-border bg-card px-2 text-xs transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2"
+            aria-label="Show how to use WSI Hive"
+            onClick={() => {
+              setShowUsageGuide(true)
+            }}
+          >
+            <CircleHelp className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+            How to use
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-8 items-center rounded-md border border-border bg-card px-2 text-xs transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2"
             onClick={() => {
               rescan()
             }}
@@ -408,6 +509,13 @@ export default function App() {
           )}
         </main>
       </div>
+      {showUsageGuide && (
+        <UsageGuide
+          onClose={() => {
+            setShowUsageGuide(false)
+          }}
+        />
+      )}
       {showLegalNotice && (
         <LegalClinicalNotice
           logoUrl={uhnLabsLogoUrl}
