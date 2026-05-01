@@ -2,6 +2,13 @@ import { app } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, normalize, sep } from 'node:path'
 
+/** In-memory session override; cleared when the window closes or the app quits (never persisted). */
+let slidesRootSessionOverride: string | null = null
+
+export function setSlidesRootSessionOverride(absolutePath: string | null): void {
+  slidesRootSessionOverride = absolutePath
+}
+
 /**
  * If the payload lives under a folder named {@code .wsi-usb}/(win|mac|linux|…), treat the
  * drive root (parent of that folder) as the app root so a sibling {@code Slides/} on the
@@ -47,9 +54,13 @@ export function getApplicationRootDir(): string {
 }
 
 /**
- * The folder that holds WSI data (sibling to portable bundle / exe folder).
+ * The folder that holds WSI data (sibling to portable bundle / exe folder),
+ * or a session-only override chosen from the UI (not persisted).
  */
 export function getSlidesRootPath(): string {
+  if (slidesRootSessionOverride) {
+    return slidesRootSessionOverride
+  }
   return join(getApplicationRootDir(), 'Slides')
 }
 

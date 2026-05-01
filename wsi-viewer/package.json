@@ -8,6 +8,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "predev": "node scripts/ensure-preload.cjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc -b --noEmit",

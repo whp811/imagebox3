@@ -21,3 +21,7 @@ export type SlidesInfo = {
   applicationRoot: string
   slidesRoot: string
 }
+
+export type PickSlidesFolderResult =
+  | { cancelled: true }
+  | { cancelled: false; info: SlidesInfo }

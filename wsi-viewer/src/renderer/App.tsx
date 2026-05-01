@@ -16,7 +16,7 @@ import {
   ZoomIn,
 } from 'lucide-react'
 import { parseSlidePackageName } from '../shared/slide-package-meta'
-import type { ScannedSlide, SlidesInfo } from '../shared/types'
+import type { PickSlidesFolderResult, ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
@@ -234,9 +234,35 @@ export default function App() {
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [showLegalNotice, setShowLegalNotice] = useState(true)
   const [showUsageGuide, setShowUsageGuide] = useState(false)
+  const [showChangeFolderUnlocked, setShowChangeFolderUnlocked] = useState(false)
   const fallbackThumbDone = useRef<Set<string>>(new Set())
   const embeddedThumbDone = useRef<Set<string>>(new Set())
   const openRequestId = useRef(0)
+  const folderSecretTapCountRef = useRef(0)
+  const folderSecretTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (folderSecretTapTimerRef.current) {
+        clearTimeout(folderSecretTapTimerRef.current)
+      }
+    }
+  }, [])
+
+  const registerFolderSecretTap = useCallback(() => {
+    if (folderSecretTapTimerRef.current) {
+      clearTimeout(folderSecretTapTimerRef.current)
+    }
+    folderSecretTapCountRef.current += 1
+    if (folderSecretTapCountRef.current >= 7) {
+      folderSecretTapCountRef.current = 0
+      setShowChangeFolderUnlocked(true)
+    } else {
+      folderSecretTapTimerRef.current = setTimeout(() => {
+        folderSecretTapCountRef.current = 0
+      }, 2000)
+    }
+  }, [])
 
   const rescan = useCallback(async () => {
     if (!window.wsiApi) {
@@ -256,6 +282,35 @@ export default function App() {
       setLoading(false)
     }
   }, [])
+
+  const changeScannedFolderPath = useCallback(async () => {
+    const api = window.wsiApi
+    if (!api) {
+      return
+    }
+    try {
+      let r: PickSlidesFolderResult
+      if (typeof api.pickSlidesFolder === 'function') {
+        r = await api.pickSlidesFolder()
+      } else if (typeof api.invoke === 'function') {
+        r = (await api.invoke('slides:pickSlidesFolder')) as PickSlidesFolderResult
+      } else {
+        setErr(
+          `Folder picker unavailable (stale Electron preload). wsiApi: ${Object.keys(api).join(', ')}. Quit the app, then in wsi-viewer run: npm run build, or npm run dev`,
+        )
+        return
+      }
+      if (r.cancelled) {
+        return
+      }
+      setInfo(r.info)
+      setActive(null)
+      setWsiUrl(null)
+      await rescan()
+    } catch (e) {
+      setErr(String(e))
+    }
+  }, [rescan])
 
   useEffect(() => {
     if (showLegalNotice) {
@@ -405,17 +460,32 @@ export default function App() {
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {info && (
               <div className="mb-2">
-                <button
-                  type="button"
-                  className="rounded p-1 text-muted-foreground hover:bg-background"
-                  title={showSlidesRoot ? 'Hide slides folder path' : info.slidesRoot}
-                  aria-label="Toggle slides folder path"
-                  onClick={() => {
-                    setShowSlidesRoot((show) => !show)
-                  }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex flex-wrap items-center gap-0.5">
+                  <button
+                    type="button"
+                    className="rounded p-1 text-muted-foreground hover:bg-background"
+                    title={showSlidesRoot ? 'Hide slides folder path' : info.slidesRoot}
+                    aria-label="Toggle slides folder path"
+                    onClick={() => {
+                      registerFolderSecretTap()
+                      setShowSlidesRoot((show) => !show)
+                    }}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </button>
+                  {showChangeFolderUnlocked && (
+                    <button
+                      type="button"
+                      className="rounded border border-border/70 bg-background px-1 py-px text-[9px] leading-tight text-muted-foreground hover:bg-background/80"
+                      title="Pick a different folder to scan for slides (this session only)"
+                      onClick={() => {
+                        void changeScannedFolderPath()
+                      }}
+                    >
+                      change folder path
+                    </button>
+                  )}
+                </div>
                 {showSlidesRoot && (
                   <p className="mt-1 break-all text-[10px] text-muted-foreground" title={info.slidesRoot}>
                     {info.slidesRoot}

@@ -1,10 +1,15 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { execFile } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerWsiFileHandler, registerWsiSchemesEarly, toWsiUrl } from './wsi-protocol'
-import { ensureSlidesDir, getApplicationRootDir, getSlidesRootPath } from './slides-root'
+import {
+  ensureSlidesDir,
+  getApplicationRootDir,
+  getSlidesRootPath,
+  setSlidesRootSessionOverride,
+} from './slides-root'
 import { scanForSlides } from './scan-slides'
 import { materializeZipEntrySourceForViewing } from './zip-source'
 import { readEmbeddedLabelThumbnailDataUrl } from './embedded-label-thumbnail'
@@ -51,6 +56,25 @@ function createWindow() {
           }
         : {}
 
+  const preloadPath = join(__dirname, '../preload/index.mjs')
+  if (!app.isPackaged) {
+    console.info('[WSI Hive dev] Preload path:', preloadPath)
+    try {
+      if (existsSync(preloadPath)) {
+        const preloadSrc = readFileSync(preloadPath, 'utf8')
+        if (!preloadSrc.includes('pickSlidesFolder')) {
+          console.error(
+            '[WSI Hive dev] Preload file on disk has no pickSlidesFolder — run from wsi-viewer: npm run build',
+          )
+        }
+      } else {
+        console.error('[WSI Hive dev] Preload file missing — run from wsi-viewer: npm run build')
+      }
+    } catch (e) {
+      console.warn('[WSI Hive dev] Could not read preload for sanity check', e)
+    }
+  }
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -62,7 +86,7 @@ function createWindow() {
       nodeIntegration: false,
       webSecurity: true,
       sandbox: false,
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: preloadPath,
     },
   })
   const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
@@ -77,6 +101,10 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler((d) => {
     shell.openExternal(d.url)
     return { action: 'deny' }
+  })
+
+  mainWindow.on('closed', () => {
+    setSlidesRootSessionOverride(null)
   })
 }
 
@@ -94,6 +122,29 @@ app.whenReady().then(() => {
   ipcMain.handle('slides:rescan', async () => {
     return scanForSlides(ensureSlidesDir())
   })
+  ipcMain.handle('slides:pickSlidesFolder', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, {
+          properties: ['openDirectory'],
+          title: 'Select folder to scan for slides',
+        })
+      : await dialog.showOpenDialog({
+          properties: ['openDirectory'],
+          title: 'Select folder to scan for slides',
+        })
+    if (canceled || !filePaths[0]) {
+      return { cancelled: true as const }
+    }
+    setSlidesRootSessionOverride(filePaths[0])
+    return {
+      cancelled: false as const,
+      info: {
+        applicationRoot: getApplicationRootDir(),
+        slidesRoot: getSlidesRootPath(),
+      },
+    }
+  })
   ipcMain.handle('wsi:pathToUrl', async (_e, { absolutePath }: { absolutePath: string }) => {
     const source = await materializeZipEntrySourceForViewing(absolutePath, app.getPath('userData'))
     return toWsiUrl(source)
@@ -108,6 +159,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('will-quit', () => {
+  setSlidesRootSessionOverride(null)
 })
 
 export {}
