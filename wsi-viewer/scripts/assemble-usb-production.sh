@@ -58,6 +58,10 @@ if [ -d "$ROOT/start-here-assets" ]; then
   cp -R "$ROOT/start-here-assets" "$OUT/"
 fi
 
+if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ -f "$OUT/Start Here.html" ]; then
+  "$ROOT/scripts/apply-start-here-icon.sh" "$OUT/Start Here.html" "$ROOT/start-here-assets/start-here-file-icon.png" || true
+fi
+
 if [ -d "$ROOT/Slides" ]; then
   cp -R "$ROOT/Slides/." "$OUT/Slides/" 2>/dev/null || true
   find "$OUT/Slides" -name .DS_Store -delete 2>/dev/null || true

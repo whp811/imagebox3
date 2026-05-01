@@ -22,6 +22,9 @@ cp -f "$PACK/PACK.md" "$OUT/" 2>/dev/null || true
 cp -f "$ROOT/Start Here.html" "$OUT/" 2>/dev/null || true
 rm -rf "$OUT/start-here-assets"
 cp -R "$ROOT/start-here-assets" "$OUT/start-here-assets" 2>/dev/null || true
+if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ -f "$OUT/Start Here.html" ]; then
+  "$ROOT/scripts/apply-start-here-icon.sh" "$OUT/Start Here.html" "$ROOT/start-here-assets/start-here-file-icon.png" || true
+fi
 cp -f "$PACK/WSI-Hive-Windows.bat" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-macOS.command" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-Linux.sh" "$OUT/" 2>/dev/null || true
