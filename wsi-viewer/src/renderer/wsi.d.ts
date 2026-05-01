@@ -5,6 +5,7 @@ export {}
 declare global {
   interface Window {
     wsiApi: {
+      platform: string
       getInfo: () => Promise<SlidesInfo>
       rescan: () => Promise<ScannedSlide[]>
       pathToWsiUrl: (absolutePath: string) => Promise<string>

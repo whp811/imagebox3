@@ -34,10 +34,29 @@ if (app.isPackaged) {
 registerWsiSchemesEarly()
 
 function createWindow() {
+  const titleBarOptions =
+    process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 16, y: 16 },
+        }
+      : process.platform === 'win32'
+        ? {
+            titleBarStyle: 'hidden' as const,
+            titleBarOverlay: {
+              color: '#fafafa',
+              symbolColor: '#111827',
+              height: 48,
+            },
+          }
+        : {}
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
     show: true,
+    title: 'WSI Hive',
+    ...titleBarOptions,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

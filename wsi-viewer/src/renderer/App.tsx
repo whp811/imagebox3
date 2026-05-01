@@ -223,6 +223,7 @@ function UsageGuide({ onClose }: { onClose: () => void }) {
 }
 
 export default function App() {
+  const platform = window.wsiApi?.platform
   const [info, setInfo] = useState<SlidesInfo | null>(null)
   const [slides, setSlides] = useState<ScannedSlide[]>([])
   const [loading, setLoading] = useState(true)
@@ -345,14 +346,20 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen min-h-0 flex-col overflow-hidden bg-background">
-      <header className="flex h-12 shrink-0 items-center border-b border-border px-3">
+      <header
+        className={cn(
+          'app-drag flex h-12 shrink-0 items-center border-b border-border px-3',
+          platform === 'darwin' && 'pl-[88px]',
+          platform === 'win32' && 'pr-[150px]',
+        )}
+      >
         <img
           src={uhnLabsLogoUrl}
           alt="UHN Laboratory Medicine"
           className="h-8 w-auto shrink-0"
           draggable={false}
         />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="app-no-drag ml-auto flex items-center gap-2">
           <button
             type="button"
             className="inline-flex h-8 items-center rounded-md border border-border bg-card px-2 text-xs transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-[#1d335c] focus:ring-offset-2"

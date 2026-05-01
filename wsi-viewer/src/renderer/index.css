@@ -36,4 +36,6 @@
   .text-card-foreground { color: hsl(var(--card-foreground)); }
   .text-muted-foreground { color: hsl(var(--muted-foreground)); }
   .border-border { border-color: hsl(var(--border)); }
+  .app-drag { -webkit-app-region: drag; }
+  .app-no-drag { -webkit-app-region: no-drag; }
 }
