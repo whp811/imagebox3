@@ -1,0 +1,10 @@
+# Legacy Imagebox3 snapshot — not imported by WSI Hive; keep out of knowledge graph
+# so AST/semantic graphs match the running app only.
+archive/
+
+# Generated graph outputs — not source (regenerated each run)
+graphify-out/graph.html
+graphify-out/GRAPH_REPORT.md
+
+# OpenSeadragon stock control sprites — no app-specific semantics
+wsi-viewer/public/osd/images/

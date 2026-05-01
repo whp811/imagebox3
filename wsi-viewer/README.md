@@ -56,5 +56,4 @@ Details: `packaging/universal/PACK.md` and `README.txt` (copied into the release
 ## Notes
 
 - shadcn/ui: this UI uses **Tailwind**-style layout and tokens. You can run `npx shadcn@latest init` in this folder and restyle; structure is already componentized (`App`, `WsiOsdView`).
-- Legacy Imagebox3 code lives under `../archive/imagebox3/` with restore notes.
 - If OpenSlide **workers** fail under `sandbox: true` in your environment, set `webPreferences.sandbox` to `false` in `src/main/index.ts` (trade security vs compatibility).
