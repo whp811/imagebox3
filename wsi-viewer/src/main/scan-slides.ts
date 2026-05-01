@@ -261,6 +261,41 @@ function sortLabelImageCandidates(names: string[], evidenceRoot?: string) {
   })
 }
 
+function normalizedSlideSortText(value?: string) {
+  return (value || '').replace(/\0/g, '').trim().toUpperCase()
+}
+
+function compareTextByCharacter(a: string, b: string) {
+  const length = Math.min(a.length, b.length)
+  for (let i = 0; i < length; i += 1) {
+    const diff = a.charCodeAt(i) - b.charCodeAt(i)
+    if (diff !== 0) {
+      return diff
+    }
+  }
+  return a.length - b.length
+}
+
+function slideIdSortKey(slide: ScannedSlide) {
+  const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
+  const pathMeta = parseSlidePackageName(pathText)
+  return normalizedSlideSortText(
+    slide.specimenId
+      || pathMeta.specimenId
+      || slide.label
+      || slide.fileName
+      || slide.relativeToSlides,
+  )
+}
+
+function compareSlidesBySlideId(a: ScannedSlide, b: ScannedSlide) {
+  return compareTextByCharacter(slideIdSortKey(a), slideIdSortKey(b))
+    || compareTextByCharacter(
+      normalizedSlideSortText(a.relativeToSlides),
+      normalizedSlideSortText(b.relativeToSlides),
+    )
+}
+
 function splitZipPath(name: string) {
   return name.split(/[\\/]+/).filter(Boolean)
 }
@@ -461,6 +496,6 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
     }
   }
   await walk(root)
-  out.sort((a, b) => a.relativeToSlides.localeCompare(b.relativeToSlides, undefined, { sensitivity: 'base' }))
+  out.sort(compareSlidesBySlideId)
   return out
 }
