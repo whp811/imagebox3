@@ -175,40 +175,40 @@ function UsageGuide({ onClose }: { onClose: () => void }) {
 
         <div className="min-h-0 overflow-y-auto p-5">
           <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-lg border border-[#cfd8e2] bg-[#f2f5f8] p-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#1d335c]">
+            <section className="rounded-lg border border-[#d9dde2] bg-[#f6f7f8] p-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#4f565d]">
                 <PanelLeft className="h-4 w-4" aria-hidden="true" />
                 Pick a Slide
               </div>
-              <div className="mt-4 grid min-h-32 grid-cols-[72px_1fr] overflow-hidden rounded-md border border-[#d8deea] bg-white">
-                <div className="space-y-2 border-r border-[#e4e8f0] p-2">
-                  <div className="rounded border border-amber-500/80 bg-[#fff8e6] p-1">
-                    <div className="h-8 rounded bg-[#c9d9ee]" />
-                    <div className="mt-1 h-1.5 rounded bg-[#1d335c]" />
+              <div className="mt-4 grid min-h-32 grid-cols-[72px_1fr] overflow-hidden rounded-md border border-[#dfe3e8] bg-white">
+                <div className="space-y-2 border-r border-[#e4e7eb] p-2">
+                  <div className="rounded border border-[#d0c5ad] bg-[#f2eee5] p-1">
+                    <div className="h-8 rounded bg-[#dcdee0]" />
+                    <div className="mt-1 h-1.5 rounded bg-[#5f6468]" />
                   </div>
-                  <div className="rounded border border-[#d8deea] p-1">
-                    <div className="h-8 rounded bg-[#d8e5cd]" />
+                  <div className="rounded border border-[#dfe3e8] p-1">
+                    <div className="h-8 rounded bg-[#e1e4df]" />
                   </div>
                 </div>
                 <div className="grid place-items-center bg-white">
-                  <MousePointer2 className="h-10 w-10 text-[#1d335c]" aria-hidden="true" />
+                  <MousePointer2 className="h-10 w-10 text-[#5f6468]" aria-hidden="true" />
                 </div>
               </div>
               <p className="mt-3 text-xs leading-5 text-[#4b5563]">Choose a slide thumbnail in the sidebar to open it in the viewer.</p>
             </section>
 
-            <section className="rounded-lg border border-[#cfd8e2] bg-[#f2f5f8] p-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#1d335c]">
+            <section className="rounded-lg border border-[#d9dde2] bg-[#f6f7f8] p-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#4f565d]">
                 <ScanSearch className="h-4 w-4" aria-hidden="true" />
                 Inspect
               </div>
-              <div className="mt-4 rounded-md border border-[#d8deea] bg-white p-3">
-                <div className="relative h-28 overflow-hidden rounded bg-[#f7f7f5]">
-                  <div className="absolute left-5 top-4 h-16 w-28 rotate-[-8deg] rounded-full border-4 border-[#c9d9ee] bg-[#fff8e6]" />
-                  <div className="absolute bottom-4 right-5 h-12 w-20 rotate-[10deg] rounded-full border-4 border-[#d8e5cd] bg-[#f7d7b9]" />
-                  <div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1d335c] bg-white/70" />
+              <div className="mt-4 rounded-md border border-[#dfe3e8] bg-white p-3">
+                <div className="relative h-28 overflow-hidden rounded bg-[#f7f7f7]">
+                  <div className="absolute left-5 top-4 h-16 w-28 rotate-[-8deg] rounded-full border-4 border-[#dcdee0] bg-[#f2eee5]" />
+                  <div className="absolute bottom-4 right-5 h-12 w-20 rotate-[10deg] rounded-full border-4 border-[#e1e4df] bg-[#eadfd3]" />
+                  <div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#5f6468] bg-white/70" />
                 </div>
-                <div className="mt-3 flex items-center justify-center gap-3 text-[#1d335c]">
+                <div className="mt-3 flex items-center justify-center gap-3 text-[#5f6468]">
                   <ZoomIn className="h-5 w-5" aria-label="Zoom" />
                   <Hand className="h-5 w-5" aria-label="Pan" />
                 </div>
