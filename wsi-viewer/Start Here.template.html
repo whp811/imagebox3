@@ -255,6 +255,11 @@
       line-height: 1.28;
     }
 
+    #windows-steps,
+    #mac-steps {
+      scroll-margin-top: 20px;
+    }
+
     p {
       margin: 0 0 14px;
     }
@@ -505,23 +510,27 @@
 
       <aside class="start-panel" aria-labelledby="quick-start-title">
         <h2 id="quick-start-title">Open WSI Hive</h2>
-        <p class="launch-note">Windows can try the launcher button below. Mac apps cannot be opened from this web page; use Finder and double-click the app.</p>
+        <p class="launch-note">Browsers cannot start the app from this page. Choose your computer below for step-by-step instructions.</p>
 
         <div class="launch-group">
           <div class="launcher">
             <h3>Windows</h3>
             <div class="button-row">
-              <a class="button" href="Launch-WSI-Hive-Windows.hta">
-                <span>Try Windows Launcher</span>
+              <a class="button" href="#windows-steps">
+                <span>How to open on Windows</span>
                 <img class="platform-icon" src=".wsi-hive/start-here-assets/platform-windows.svg" alt="" aria-hidden="true">
               </a>
             </div>
-            <p class="small">If the browser asks what to do, choose to open it. If nothing opens, double-click <strong>WSI Hive.exe</strong> in File Explorer.</p>
           </div>
 
           <div class="launcher">
             <h3>Mac</h3>
-            <p class="small">Open <strong>Finder</strong>, click the flash drive, then double-click <strong>WSI Hive.app</strong>. If Finder shows it as <strong>WSI Hive</strong>, double-click that icon.</p>
+            <div class="button-row">
+              <a class="button" href="#mac-steps">
+                <span>How to open on Mac</span>
+                <img class="platform-icon" src=".wsi-hive/start-here-assets/platform-mac.svg" alt="" aria-hidden="true">
+              </a>
+            </div>
           </div>
         </div>
 
@@ -551,11 +560,11 @@
           <h3>What is on the flash drive?</h3>
           <ul>
             <li>This guide, called <code>Start Here.html</code>.</li>
-            <li>WSI Hive for Windows.</li>
-            <li>WSI Hive for Mac.</li>
+            <li><strong>WSI Hive.exe</strong> for Windows.</li>
+            <li><strong>WSI Hive.app</strong> for Mac.</li>
             <li>A folder called <code>Slides</code>, if slide files are included.</li>
           </ul>
-          <p class="small">Some folders may be hidden. That is normal. To move slides to another drive, copy the entire <code>Slides</code> folder — it includes hidden launch helpers. Please do not move, rename, or delete files by hand.</p>
+          <p class="small">To move slides to another drive, copy the entire <code>Slides</code> folder. Please do not move, rename, or delete the app files or this guide unless UHN tells you to.</p>
         </div>
 
         <div class="plain-box">
@@ -573,15 +582,13 @@
     <section id="run" aria-labelledby="run-title">
       <h2 id="run-title">How to Open WSI Hive</h2>
 
-      <h3>Windows steps</h3>
+      <h3 id="windows-steps">Windows steps</h3>
       <ol>
         <li>Put the flash drive into your computer.</li>
         <li>Open <strong>File Explorer</strong>.</li>
         <li>Click the flash drive name.</li>
-        <li>Open this guide, if it is not already open.</li>
-        <li>Click <strong>Try Windows Launcher</strong>.</li>
-        <li>If asked, choose to open or run the launcher.</li>
-        <li>If that does not work, double-click <strong>WSI Hive.exe</strong> on the flash drive.</li>
+        <li>Double-click <strong>WSI Hive.exe</strong>.</li>
+        <li>Open this guide anytime from the same folder if you need help.</li>
       </ol>
 
       <details>
@@ -599,10 +606,9 @@
         <li>Put the flash drive into your Mac.</li>
         <li>Open <strong>Finder</strong>.</li>
         <li>Click the flash drive name.</li>
-        <li>Open this guide, if it is not already open.</li>
         <li>Double-click <strong>WSI Hive.app</strong>. Finder may show it as <strong>WSI Hive</strong>.</li>
-        <li>If that does not work, double-click <strong>Launch-WSI-Hive-Mac.app</strong>.</li>
         <li>If asked, choose to open or allow the app.</li>
+        <li>Open this guide anytime from the same folder if you need help.</li>
       </ol>
 
       <div class="screenshot-grid" aria-label="Mac screenshots for opening WSI Hive">
@@ -649,7 +655,7 @@
       </div>
 
       <h3>If you need to find the slide folder</h3>
-      <p>The slide folder is usually called <code>Slides</code> and is on the flash drive. Some versions of the drive may hide this folder. That is okay. Please do not rename it or move it.</p>
+      <p>The slide folder is called <code>Slides</code> and sits on the flash drive next to the apps and this guide. Please do not rename it or move it.</p>
     </section>
 
     <section id="warning" aria-labelledby="warning-title">
@@ -702,7 +708,7 @@
 
       <details>
         <summary>I cannot find the Slides folder</summary>
-        <p>The folder may be hidden. Do not create a new folder or move files. Contact UHN if the app cannot find your slides.</p>
+        <p>Look on the flash drive for a folder named <code>Slides</code> next to <strong>WSI Hive.exe</strong>, <strong>WSI Hive.app</strong>, and this guide. Do not create a new folder or move files. Contact UHN if the app cannot find your slides.</p>
       </details>
 
       <details>

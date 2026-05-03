@@ -15,13 +15,12 @@ The **production Mac + Windows handout** is built so the normal patient view sta
 USB root/
   Start Here.html
   Slides/
-    .wsi-hive/      ← hidden launch helpers (copied with Slides/)
     … slide files …
   WSI Hive.app      ← visible on Mac, hidden on Windows
   WSI Hive.exe      ← visible on Windows, hidden on Mac (Finder)
 ```
 
-`Start Here.html` is the user-facing guide. The Windows button targets **`Launch-WSI-Hive-Windows.hta`** (opened by **mshta.exe**, which runs **`WSI-Hive-Windows.bat`**), with **`WSI Hive.exe`** as the direct fallback. On macOS, the guide shows instructions only because browsers cannot launch a native app from an HTML page; users should double-click **`WSI Hive.app`** or **`Launch-WSI-Hive-Mac.app`** in Finder. Duplicate launchers also live under **`Slides/.wsi-hive/`** when you copy the whole **`Slides`** folder.
+`Start Here.html` is the user-facing guide (text and embedded images only — no separate asset folder on the stick). Browsers cannot launch the native app from the page; on **Windows** users double-click **`WSI Hive.exe`**, and on **macOS** they double-click **`WSI Hive.app`** in Finder.
 
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 
@@ -37,7 +36,7 @@ Also on the same volume, **next to** the executable / `.app`, keep:
 ```text
 E:\
   Start Here.html
-  Slides\           ← slide files; hidden Slides\.wsi-hive\ holds launch helpers
+  Slides\           ← slide files
   WSI Hive.exe      ← visible on Windows
   WSI Hive.app      ← hidden on Windows
   .wsi-hive-data\   ← first-run (optional to hide on Windows; see above)
@@ -56,8 +55,8 @@ E:\
 
 ## Open the app
 
-- **Windows:** click **Try Windows Launcher** in `Start Here.html`, or double-click **WSI Hive.exe**.
-- **macOS:** open the flash drive in Finder, then double-click **WSI Hive.app** (Finder may show it as **WSI Hive**). If needed, double-click **Launch-WSI-Hive-Mac.app**.
+- **Windows:** double-click **WSI Hive.exe** (see `Start Here.html` for step-by-step help).
+- **macOS:** open the flash drive in Finder, then double-click **WSI Hive.app** (Finder may show it as **WSI Hive**).
 - **Linux:** run the `AppImage` (you may need `chmod +x` on Linux-native filesystems; on FAT32 USB, use the provided shell launcher if we ship one, or see `packaging/universal/PACK.md`).
 
 ## If something writes outside the drive
@@ -70,4 +69,4 @@ E:\
 
 On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.
 
-The assembler hides `WSI Hive.exe` in Finder using **`SetFile -a V` only** (not `chflags`), so ExFAT sticks stay visible in Explorer on Windows. It applies full hidden flags to `Slides/.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `Slides/.wsi-hive/` when finalized on Windows. The launcher clears any stray DOS hidden bit on `WSI Hive.exe` on first run. The hidden launchers re-apply flags on first run.
+The assembler hides `WSI Hive.exe` in Finder using **`SetFile -a V` only** (not `chflags`), so ExFAT sticks stay visible in Explorer on Windows. When the bundle is finalized on Windows, **`WSI Hive.app`** gets the Explorer hidden attribute so the root looks like Start Here + Slides + the Windows app.

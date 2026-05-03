@@ -18,7 +18,7 @@ npm install
 npm run dev          # Vite + Electron
 npm run build        # output to out/
 npm run dist         # electron-builder → dist/
-npm run dist:usb     # release/WSI-Hive-USB with clean visible root + hidden support files
+npm run dist:usb     # release/WSI-Hive-USB — Start Here + Slides + dual-platform apps
 ```
 
 ## How it works
@@ -35,7 +35,6 @@ Production USB handout for Mac + Windows keeps the patient-facing root clean:
 - `Slides/` — put `.svs`, `.ndpi`, `.tif`, `.tiff`, `.mrxs`, etc. here.
 - `WSI Hive.app` — macOS app bundle, visible on Mac and hidden on Windows.
 - `WSI Hive.exe` — portable Windows app, visible on Windows and hidden from Finder on Mac.
-- `.wsi-hive/` — hidden launch helpers inside `Slides/` (copy the whole `Slides` folder to carry them to another drive).
 
 From `wsi-viewer/`, run `npm run dist:usb`. Output lands in `release/WSI-Hive-USB/`.
 
