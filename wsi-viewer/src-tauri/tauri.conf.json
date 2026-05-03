@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WSI Hive",
+  "version": "0.1.0",
+  "identifier": "com.wsihive.viewer",
+  "build": {
+    "frontendDist": "../dist-tauri",
+    "devUrl": "http://localhost:5184",
+    "beforeDevCommand": "npm run dev:tauri:frontend",
+    "beforeBuildCommand": "npm run build:tauri:frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "WSI Hive",
+        "width": 1280,
+        "height": 860,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri: asset:; connect-src 'self' tauri: ipc: http://ipc.localhost http://wsi.localhost https://wsi.localhost wsi: data: blob:; img-src 'self' asset: data: blob: tauri: http://ipc.localhost https://asset.localhost http://asset.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    }
+  }
+}

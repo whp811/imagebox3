@@ -16,10 +16,17 @@
     "dist:usb": "npm run build && electron-builder -c electron-builder.json --mac dir --universal && electron-builder -c electron-builder.json --win portable --x64 && npm run usb:assemble",
     "start-here:embed": "python3 scripts/inline-start-here-assets.py",
     "usb:assemble": "npm run start-here:embed && bash scripts/assemble-usb-production.sh",
+    "usb:assemble:tauri": "npm run start-here:embed && bash scripts/assemble-usb-tauri-production.sh",
     "universal:assemble": "npm run start-here:embed && bash scripts/assemble-universal-bundle.sh",
     "preview": "electron-vite preview",
     "pack": "npm run build && electron-builder -c.compression=store --dir",
-    "postinstall": "node scripts/copy-osd-assets.cjs"
+    "postinstall": "node scripts/copy-osd-assets.cjs",
+    "dev:tauri:frontend": "vite --config vite.config.tauri.ts",
+    "build:tauri:frontend": "vite build --config vite.config.tauri.ts",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "dist:usb:tauri": "npm run tauri:build && npm run usb:assemble:tauri"
   },
   "dependencies": {
     "@conflux-xyz/openslide-wasm": "^2.3.0",
@@ -44,6 +51,10 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/cli": "^2.9.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-os": "^2.3.0"
   }
 }
