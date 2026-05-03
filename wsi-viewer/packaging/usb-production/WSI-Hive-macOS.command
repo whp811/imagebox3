@@ -2,12 +2,24 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$DIR/../.." && pwd)"
+if [ -f "$DIR/WSI Hive.exe" ] || [ -d "$DIR/WSI Hive.app" ]; then
+  ROOT="$DIR"
+else
+  ROOT="$(cd "$DIR/../.." && pwd)"
+fi
 cd "$ROOT"
 
-chflags hidden "$DIR" "$ROOT/WSI Hive.exe" 2>/dev/null || true
-if command -v SetFile >/dev/null 2>&1; then
-  SetFile -a V "$DIR" "$ROOT/WSI Hive.exe" 2>/dev/null || true
+if [ -d "$ROOT/Slides/.wsi-hive" ]; then
+  chflags hidden "$ROOT/Slides/.wsi-hive" 2>/dev/null || true
+  if command -v SetFile >/dev/null 2>&1; then
+    SetFile -a V "$ROOT/Slides/.wsi-hive" 2>/dev/null || true
+  fi
+fi
+if [ -f "$ROOT/WSI Hive.exe" ]; then
+  # Finder-only: avoid chflags on .exe — on ExFAT it maps to DOS Hidden and Explorer hides the file on Windows.
+  if command -v SetFile >/dev/null 2>&1; then
+    SetFile -a V "$ROOT/WSI Hive.exe" 2>/dev/null || true
+  fi
 fi
 
 APP="$ROOT/WSI Hive.app"

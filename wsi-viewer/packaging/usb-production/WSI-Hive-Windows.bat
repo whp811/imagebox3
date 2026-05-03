@@ -1,8 +1,15 @@
 @echo off
 setlocal
-set "LAUNCHER_DIR=%~dp0"
-for %%I in ("%LAUNCHER_DIR%..\..") do set "ROOT=%%~fI\"
+set "L=%~dp0"
+if exist "%L%WSI Hive.exe" (
+  for %%I in ("%L%.") do set "ROOT=%%~fI\"
+) else (
+  for %%I in ("%L%..\..") do set "ROOT=%%~fI\"
+)
 cd /d "%ROOT%"
+
+REM Clears hidden flag if release was assembled on Mac (chflags can map to DOS hidden on ExFAT).
+attrib -h "%ROOT%WSI Hive.exe" >nul 2>&1
 
 attrib +h "%ROOT%Slides\.wsi-hive" >nul 2>&1
 attrib +h "%ROOT%WSI Hive.app" >nul 2>&1

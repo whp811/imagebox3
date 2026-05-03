@@ -56,6 +56,12 @@ if [ -f "$ROOT/Start Here.html" ]; then
   cp -f "$ROOT/Start Here.html" "$OUT/"
 fi
 
+cp -f "$PACK/WSI-Hive-Windows.bat" "$OUT/"
+cp -f "$PACK/WSI-Hive-macOS.command" "$OUT/"
+chmod +x "$OUT/WSI-Hive-macOS.command" 2>/dev/null || true
+cp -f "$PACK/Launch-WSI-Hive-Windows.hta" "$OUT/" 2>/dev/null || true
+cp -R "$PACK/Launch-WSI-Hive-Mac.app" "$OUT/" 2>/dev/null || true
+chmod +x "$OUT/Launch-WSI-Hive-Mac.app/Contents/MacOS/Launch-WSI-Hive-Mac" 2>/dev/null || true
 cp -f "$PACK/WSI-Hive-Windows.bat" "$OUT/$SYSTEM_DIR/"
 cp -f "$PACK/WSI-Hive-macOS.command" "$OUT/$SYSTEM_DIR/"
 chmod +x "$OUT/$SYSTEM_DIR/WSI-Hive-macOS.command" 2>/dev/null || true
@@ -72,6 +78,14 @@ fi
 cp -R "$mac_app" "$OUT/WSI Hive.app"
 cp -f "$win_exe" "$OUT/WSI Hive.exe"
 chmod +x "$OUT/WSI Hive.app/Contents/MacOS/"* 2>/dev/null || true
+
+# Finder-only “invisible” flag — avoids chflags on .exe: on ExFAT/FAT32, chflags hidden
+# maps to the DOS Hidden bit and Explorer hides the file on Windows too.
+hide_exe_from_finder_macos_only() {
+  if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && command -v SetFile >/dev/null 2>&1; then
+    SetFile -a V "$@" 2>/dev/null || true
+  fi
+}
 
 hide_for_macos() {
   if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ]; then
@@ -92,8 +106,10 @@ hide_for_windows() {
   done
 }
 
-# Normal Finder view: Start Here + Slides + Mac app.
-hide_for_macos "$OUT/WSI Hive.exe" "$OUT/$SYSTEM_DIR"
+# Normal Finder view: hide Windows .exe for Mac users (SetFile only — see above).
+hide_exe_from_finder_macos_only "$OUT/WSI Hive.exe"
+# Hide Slides/.wsi-hive launchers in Finder (and on Windows via DOS hidden on FAT).
+hide_for_macos "$OUT/$SYSTEM_DIR"
 
 # Normal Windows Explorer view: Start Here + Slides + Windows app.
 # Effective when the release is assembled or finalized on Windows; the hidden

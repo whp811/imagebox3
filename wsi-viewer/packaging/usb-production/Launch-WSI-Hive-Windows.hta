@@ -1,0 +1,61 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=9">
+<title>Launch WSI Hive</title>
+<script language="JScript">
+function dirFromHta() {
+  var path = String(window.location.pathname);
+  try {
+    path = decodeURIComponent(path);
+  } catch (e) {
+    path = unescape(path);
+  }
+  path = path.replace(/\//g, "\\");
+  // pathname is often "/E:/folder/file.hta"
+  if (path.substring(0, 1) === "\\" && path.length > 2 && path.substring(2, 3) === ":")
+    path = path.substring(1);
+  else if (path.substring(0, 3).match(/^[A-Za-z]:/) === null && path.indexOf("\\") === 0)
+    path = path.substring(1);
+  var i = path.lastIndexOf("\\");
+  if (i <= 0) return "";
+  return path.substring(0, i);
+}
+
+function run() {
+  try {
+    var fso = new ActiveXObject("Scripting.FileSystemObject");
+    var sh = new ActiveXObject("WScript.Shell");
+    var dir = dirFromHta();
+    if (!dir || !fso.FolderExists(dir)) {
+      alert("Could not find this helper's folder.\n\nDouble-click WSI-Hive-Windows.bat next to Start Here.html.");
+      window.close();
+      return;
+    }
+    var bat = fso.BuildPath(dir, "WSI-Hive-Windows.bat");
+    if (!fso.FileExists(bat)) {
+      var exe = fso.BuildPath(dir, "WSI Hive.exe");
+      if (fso.FileExists(exe)) {
+        sh.Run("\"" + exe + "\"", 1, false);
+        window.close();
+        return;
+      }
+      alert("Missing WSI-Hive-Windows.bat and WSI Hive.exe next to this file.");
+      window.close();
+      return;
+    }
+    sh.CurrentDirectory = dir;
+    sh.Run("\"" + bat + "\"", 1, false);
+    window.close();
+  } catch (e) {
+    alert("Could not start WSI Hive.\n\nDouble-click WSI-Hive-Windows.bat next to Start Here.html.");
+    window.close();
+  }
+}
+window.onload = run;
+</script>
+</head>
+<body style="font-family:Segoe UI,sans-serif;padding:12px;">
+<p>Starting WSI Hive…</p>
+</body>
+</html>

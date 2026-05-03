@@ -18,10 +18,10 @@ USB root/
     .wsi-hive/      ← hidden launch helpers (copied with Slides/)
     … slide files …
   WSI Hive.app      ← visible on Mac, hidden on Windows
-  WSI Hive.exe      ← visible on Windows, hidden on Mac
+  WSI Hive.exe      ← visible on Windows, hidden on Mac (Finder)
 ```
 
-`Start Here.html` is the user-facing guide. Its Windows and Mac buttons call small launchers stored inside **`Slides/.wsi-hive/`**, which then open the matching app at the USB root. Copying the entire **`Slides`** folder to another flash drive copies those helpers along with the slides.
+`Start Here.html` is the user-facing guide. The Windows button targets **`Launch-WSI-Hive-Windows.hta`** (opened by **mshta.exe**, which runs **`WSI-Hive-Windows.bat`**), with **`WSI Hive.exe`** as the direct fallback. On macOS, the guide shows instructions only because browsers cannot launch a native app from an HTML page; users should double-click **`WSI Hive.app`** or **`Launch-WSI-Hive-Mac.app`** in Finder. Duplicate launchers also live under **`Slides/.wsi-hive/`** when you copy the whole **`Slides`** folder.
 
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 
@@ -54,10 +54,10 @@ E:\
 - You do **not** need the internet to **view** slides. (Building the app from source is a separate step on a developer machine.)
 - If the OS shows a security warning (unsigned app), that is a **one-time** system dialog, not a “download the app” step.
 
-## “Click to run”
+## Open the app
 
-- **Windows:** click **Open WSI Hive for Windows** in `Start Here.html`, or double-click **WSI Hive.exe**.
-- **macOS:** click **Open WSI Hive for Mac** in `Start Here.html`, or double-click **WSI Hive.app**.
+- **Windows:** click **Try Windows Launcher** in `Start Here.html`, or double-click **WSI Hive.exe**.
+- **macOS:** open the flash drive in Finder, then double-click **WSI Hive.app** (Finder may show it as **WSI Hive**). If needed, double-click **Launch-WSI-Hive-Mac.app**.
 - **Linux:** run the `AppImage` (you may need `chmod +x` on Linux-native filesystems; on FAT32 USB, use the provided shell launcher if we ship one, or see `packaging/universal/PACK.md`).
 
 ## If something writes outside the drive
@@ -70,4 +70,4 @@ E:\
 
 On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.
 
-The assembler applies macOS hidden flags to `WSI Hive.exe` and `Slides/.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `Slides/.wsi-hive/` when the build/finalization step runs on Windows. The hidden launchers also re-apply those flags on first run.
+The assembler hides `WSI Hive.exe` in Finder using **`SetFile -a V` only** (not `chflags`), so ExFAT sticks stay visible in Explorer on Windows. It applies full hidden flags to `Slides/.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `Slides/.wsi-hive/` when finalized on Windows. The launcher clears any stray DOS hidden bit on `WSI Hive.exe` on first run. The hidden launchers re-apply flags on first run.

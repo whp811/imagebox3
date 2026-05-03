@@ -1,0 +1,6 @@
+#!/bin/bash
+# USB root = folder containing this .app bundle
+CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
+APPDIR="$(cd "$CONTENTS/.." && pwd)"
+ROOT="$(cd "$APPDIR/.." && pwd)"
+exec bash "$ROOT/WSI-Hive-macOS.command"
