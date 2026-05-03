@@ -2,16 +2,16 @@
 # Create the clean USB handout:
 #   Start Here.html
 #   Slides/
+#     .wsi-hive/        (hidden launchers — travels with Slides when that folder is copied)
 #   WSI Hive.app        (visible on macOS, hidden on Windows)
 #   WSI Hive.exe        (visible on Windows, hidden on macOS)
-#   .wsi-hive/          (hidden support files: guide assets + launchers)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${DIST_DIR:-$ROOT/dist}"
 OUT="${USB_OUT:-$ROOT/release/WSI-Hive-USB}"
 PACK="$ROOT/packaging/usb-production"
-SYSTEM_DIR=".wsi-hive"
+SYSTEM_DIR="Slides/.wsi-hive"
 
 if [ ! -d "$SRC" ]; then
   echo "Missing $SRC. Run: npm run build, then electron-builder for mac + win."
@@ -54,10 +54,6 @@ mkdir -p "$OUT/Slides" "$OUT/$SYSTEM_DIR"
 
 if [ -f "$ROOT/Start Here.html" ]; then
   cp -f "$ROOT/Start Here.html" "$OUT/"
-fi
-
-if [ -d "$ROOT/start-here-assets" ]; then
-  cp -R "$ROOT/start-here-assets" "$OUT/$SYSTEM_DIR/"
 fi
 
 cp -f "$PACK/WSI-Hive-Windows.bat" "$OUT/$SYSTEM_DIR/"

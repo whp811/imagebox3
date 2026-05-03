@@ -2,7 +2,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$DIR/.." && pwd)"
+ROOT="$(cd "$DIR/../.." && pwd)"
 cd "$ROOT"
 
 chflags hidden "$DIR" "$ROOT/WSI Hive.exe" 2>/dev/null || true

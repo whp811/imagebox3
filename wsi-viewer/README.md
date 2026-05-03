@@ -35,7 +35,7 @@ Production USB handout for Mac + Windows keeps the patient-facing root clean:
 - `Slides/` — put `.svs`, `.ndpi`, `.tif`, `.tiff`, `.mrxs`, etc. here.
 - `WSI Hive.app` — macOS app bundle, visible on Mac and hidden on Windows.
 - `WSI Hive.exe` — portable Windows app, visible on Windows and hidden on Mac.
-- `.wsi-hive/` — hidden support folder for guide assets and launch helpers.
+- `.wsi-hive/` — hidden launch helpers inside `Slides/` (copy the whole `Slides` folder to carry them to another drive).
 
 From `wsi-viewer/`, run `npm run dist:usb`. Output lands in `release/WSI-Hive-USB/`.
 

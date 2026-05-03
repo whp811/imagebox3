@@ -1,10 +1,10 @@
 @echo off
 setlocal
-set "SYSTEM=%~dp0"
-for %%I in ("%SYSTEM%..") do set "ROOT=%%~fI\"
+set "LAUNCHER_DIR=%~dp0"
+for %%I in ("%LAUNCHER_DIR%..\..") do set "ROOT=%%~fI\"
 cd /d "%ROOT%"
 
-attrib +h "%ROOT%.wsi-hive" >nul 2>&1
+attrib +h "%ROOT%Slides\.wsi-hive" >nul 2>&1
 attrib +h "%ROOT%WSI Hive.app" >nul 2>&1
 
 set "APP=%ROOT%WSI Hive.exe"

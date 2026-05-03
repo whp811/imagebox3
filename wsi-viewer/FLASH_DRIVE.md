@@ -15,12 +15,13 @@ The **production Mac + Windows handout** is built so the normal patient view sta
 USB root/
   Start Here.html
   Slides/
-  WSI Hive.app        ← visible on Mac, hidden on Windows
-  WSI Hive.exe        ← visible on Windows, hidden on Mac
-  .wsi-hive/          ← hidden support folder
+    .wsi-hive/      ← hidden launch helpers (copied with Slides/)
+    … slide files …
+  WSI Hive.app      ← visible on Mac, hidden on Windows
+  WSI Hive.exe      ← visible on Windows, hidden on Mac
 ```
 
-`Start Here.html` is the user-facing guide. It includes launch links, screenshots, security-warning help, troubleshooting, FAQs, flash-drive care instructions, legal/clinical warnings, and UHN Laboratory Medicine Program contact information. Its Windows and Mac buttons call small launchers stored inside `.wsi-hive/`, which then open the matching app at the USB root.
+`Start Here.html` is the user-facing guide. Its Windows and Mac buttons call small launchers stored inside **`Slides/.wsi-hive/`**, which then open the matching app at the USB root. Copying the entire **`Slides`** folder to another flash drive copies those helpers along with the slides.
 
 The **application itself** is a **single native package per platform** (no `win-unpacked` folder, no tree of runtime DLLs next to the app):
 
@@ -36,11 +37,10 @@ Also on the same volume, **next to** the executable / `.app`, keep:
 ```text
 E:\
   Start Here.html
-  Slides\           ← your slide files
+  Slides\           ← slide files; hidden Slides\.wsi-hive\ holds launch helpers
   WSI Hive.exe      ← visible on Windows
   WSI Hive.app      ← hidden on Windows
-  .wsi-hive\        ← hidden support folder
-  .wsi-hive-data\  ← first-run (optional to hide on Windows; see above)
+  .wsi-hive-data\   ← first-run (optional to hide on Windows; see above)
 ```
 
 **If you use the all-in-one zip from `npm run universal:assemble`:** you get a **root** with three clearly named starters (**WSI-Hive-Windows** / **WSI-Hive-macOS** / **WSI-Hive-Linux**), a **Slides** folder, and the per-OS app binaries under **.wsi-usb/** (intended to be out of the way in the file manager after a successful first start). Put slides in the root **Slides** folder, not under **.wsi-usb**.
@@ -70,4 +70,4 @@ E:\
 
 On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.
 
-The assembler applies macOS hidden flags to `WSI Hive.exe` and `.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `.wsi-hive/` when the build/finalization step runs on Windows. The hidden launchers also re-apply those flags on first run.
+The assembler applies macOS hidden flags to `WSI Hive.exe` and `Slides/.wsi-hive/`, and Windows hidden attributes to `WSI Hive.app` and `Slides/.wsi-hive/` when the build/finalization step runs on Windows. The hidden launchers also re-apply those flags on first run.

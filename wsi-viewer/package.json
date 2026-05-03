@@ -14,8 +14,9 @@
     "typecheck": "tsc -b --noEmit",
     "dist": "npm run build && electron-builder -c electron-builder.json",
     "dist:usb": "npm run build && electron-builder -c electron-builder.json --mac dir --universal && electron-builder -c electron-builder.json --win portable --x64 && npm run usb:assemble",
-    "usb:assemble": "bash scripts/assemble-usb-production.sh",
-    "universal:assemble": "bash scripts/assemble-universal-bundle.sh",
+    "start-here:embed": "python3 scripts/inline-start-here-assets.py",
+    "usb:assemble": "npm run start-here:embed && bash scripts/assemble-usb-production.sh",
+    "universal:assemble": "npm run start-here:embed && bash scripts/assemble-universal-bundle.sh",
     "preview": "electron-vite preview",
     "pack": "npm run build && electron-builder -c.compression=store --dir",
     "postinstall": "node scripts/copy-osd-assets.cjs"

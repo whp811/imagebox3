@@ -2,8 +2,8 @@
 # After building on each platform (or copying CI artifacts), create a single folder
 # you can zip for end users. Run from wsi-viewer/ :  ./scripts/assemble-universal-bundle.sh
 #
-# Layout: at the root, Start Here.html, start-here-assets/, the three OS
-# starters, Slides/, this README, PACK.md, and a single hidden (after first run)
+# Layout: at the root, Start Here.html (self-contained), the three OS
+# starters, Slides/, README, PACK.md, and a single hidden (after first run)
 # .wsi-usb/ tree with win/, mac/, linux/ payloads.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,8 +20,17 @@ mkdir -p "$OUT"
 cp -f "$PACK/README.txt" "$OUT/" 2>/dev/null || true
 cp -f "$PACK/PACK.md" "$OUT/" 2>/dev/null || true
 cp -f "$ROOT/Start Here.html" "$OUT/" 2>/dev/null || true
-rm -rf "$OUT/start-here-assets"
-cp -R "$ROOT/start-here-assets" "$OUT/start-here-assets" 2>/dev/null || true
+if [ -f "$OUT/Start Here.html" ]; then
+  OUT="$OUT" python3 - <<'PY'
+from pathlib import Path
+import os
+out = Path(os.environ["OUT"]) / "Start Here.html"
+text = out.read_text(encoding="utf-8")
+text = text.replace('href="Slides/.wsi-hive/WSI-Hive-Windows.bat"', 'href="WSI-Hive-Windows.bat"')
+text = text.replace('href="Slides/.wsi-hive/WSI-Hive-macOS.command"', 'href="WSI-Hive-macOS.command"')
+out.write_text(text, encoding="utf-8")
+PY
+fi
 if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ -f "$OUT/Start Here.html" ]; then
   "$ROOT/scripts/apply-start-here-icon.sh" "$OUT/Start Here.html" "$ROOT/start-here-assets/start-here-file-icon.png" || true
 fi
