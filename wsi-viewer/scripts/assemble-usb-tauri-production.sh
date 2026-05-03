@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# USB layout mirroring assemble-usb-production.sh — reads Tauri bundle outputs instead of Electron dist/.
+# One folder to copy to a USB drive root (Tauri builds only — not Electron).
+# Contains: Start Here.html, Slides/, macOS WSI Hive.app (run-in-place, no install), Windows WSI Hive.exe when built.
+# macOS: only the .app bundle is produced (no DMG) — see tauri.conf.json bundle.targets.
+# First launch from USB on macOS: if Gatekeeper blocks an unsigned build, right-click the app → Open once.
+# Default folder name includes "Tauri". Override with USB_OUT_TAURI=/path/to/folder
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${TAURI_BUNDLE_DIR:-$ROOT/src-tauri/target/release/bundle}"
-OUT="${USB_OUT_TAURI:-$ROOT/release/WSI-Hive-Tauri-USB}"
+OUT="${USB_OUT_TAURI:-$ROOT/release/Tauri-WSI-Hive-USB}"
 
 if [ ! -d "$SRC" ]; then
   echo "Missing $SRC. Run: bash scripts/build-tauri.sh (or npm run tauri:build) first."
@@ -53,6 +57,8 @@ mkdir -p "$OUT/Slides"
 
 if [ -f "$ROOT/Start Here.html" ]; then
   cp -f "$ROOT/Start Here.html" "$OUT/"
+else
+  echo "WARN: missing $ROOT/Start Here.html — USB folder will have no start guide."
 fi
 
 if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ -f "$OUT/Start Here.html" ]; then
@@ -62,6 +68,8 @@ fi
 if [ -d "$ROOT/Slides" ]; then
   cp -R "$ROOT/Slides/." "$OUT/Slides/" 2>/dev/null || true
   find "$OUT/Slides" -name .DS_Store -delete 2>/dev/null || true
+else
+  printf '%s\n' "Put whole-slide images in this folder." >"$OUT/Slides/PUT-SLIDES-HERE.txt"
 fi
 
 cp -R "$mac_app" "$OUT/WSI Hive.app"
@@ -91,5 +99,8 @@ if [ -f "$OUT/WSI Hive.exe" ]; then
 fi
 hide_for_windows "$OUT/WSI Hive.app"
 
-echo "Tauri USB bundle ready:"
+echo "Tauri USB bundle ready — copy this entire folder to the flash drive:"
+echo "  $OUT"
+echo ""
+echo "Contents (top level):"
 find "$OUT" -maxdepth 1 -mindepth 1 -print | sort

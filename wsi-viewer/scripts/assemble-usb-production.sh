@@ -58,8 +58,7 @@ if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ -f "$OUT/Start Here.htm
 fi
 
 if [ -d "$ROOT/Slides" ]; then
-  cp -R "$ROOT/Slides/." "$OUT/Slides/" 2>/dev/null || true
-  find "$OUT/Slides" -name .DS_Store -delete 2>/dev/null || true
+  python3 "$ROOT/scripts/prepare-usb-slides.py" "$ROOT/Slides" "$OUT/Slides"
 fi
 
 cp -R "$mac_app" "$OUT/WSI Hive.app"

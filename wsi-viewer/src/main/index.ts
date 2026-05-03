@@ -120,7 +120,7 @@ app.whenReady().then(() => {
     }
   })
   ipcMain.handle('slides:rescan', async () => {
-    return scanForSlides(ensureSlidesDir())
+    return scanForSlides(ensureSlidesDir(), { labelThumbnailCacheRoot: app.getPath('userData') })
   })
   ipcMain.handle('slides:pickSlidesFolder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)

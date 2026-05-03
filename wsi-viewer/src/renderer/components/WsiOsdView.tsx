@@ -69,7 +69,6 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
         slideRef.current = slide
         const v = OpenSeadragon({
           element: ref.current!,
-          tileSources: tileSource,
           animationTime: 0.15,
           blendTime: 0.05,
           constrainDuringPan: true,
@@ -87,7 +86,12 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
         viewerRef.current = v
         v.container.style.background = '#ffffff'
         v.canvas.style.background = '#ffffff'
-        v.addOnceHandler('open', () => {
+        let finished = false
+        const finishLoading = () => {
+          if (finished) {
+            return
+          }
+          finished = true
           if (!cancelled) {
             setLoadProgress(100)
             finishId = window.setTimeout(() => {
@@ -97,7 +101,10 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
               }
             }, 140)
           }
-        })
+        }
+        v.addOnceHandler('open', finishLoading)
+        v.addOnceHandler('tile-drawn', finishLoading)
+        v.open(tileSource)
       } catch (e) {
         if (!cancelled) {
           setReady(false)

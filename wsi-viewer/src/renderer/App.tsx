@@ -230,6 +230,7 @@ export default function App() {
   const [showSlidesRoot, setShowSlidesRoot] = useState(false)
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
+  const [openingSlide, setOpeningSlide] = useState<{ title: string, detail: string } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [showLegalNotice, setShowLegalNotice] = useState(true)
@@ -306,6 +307,7 @@ export default function App() {
       setInfo(r.info)
       setActive(null)
       setWsiUrl(null)
+      setOpeningSlide(null)
       await rescan()
     } catch (e) {
       setErr(String(e))
@@ -317,7 +319,7 @@ export default function App() {
       return
     }
     if (!window.wsiApi) {
-      setErr('wsiApi missing (not running in Electron shell)')
+      setErr('wsiApi missing (not running in a desktop shell)')
       return
     }
     window.wsiApi
@@ -334,26 +336,38 @@ export default function App() {
     if (sl.unsupportedReason) {
       setActive(sl)
       setWsiUrl(null)
+      setOpeningSlide(null)
       setErr(sl.unsupportedReason)
       return
     }
+    const label = slideLabelLines(sl).join(' · ') || sl.label
     setActive(sl)
+    setWsiUrl(null)
+    setOpeningSlide({
+      title: label,
+      detail: sl.requiresExtraction
+        ? 'Preparing this slide. The first open can take a few minutes on a USB drive.'
+        : 'Opening slide.',
+    })
     try {
       const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
       if (openRequestId.current !== requestId) {
         return
       }
       setWsiUrl(u)
+      setOpeningSlide(null)
     } catch (e) {
       if (openRequestId.current !== requestId) {
         return
       }
       setWsiUrl(null)
+      setOpeningSlide(null)
       setErr(String(e))
     }
   }, [])
 
   const handleViewerError = useCallback((e: string) => {
+    setOpeningSlide(null)
     setErr(e)
   }, [])
 
@@ -379,6 +393,10 @@ export default function App() {
 
   useEffect(() => {
     if (!active || active.unsupportedReason || embeddedThumbDone.current.has(active.id)) {
+      return
+    }
+    if (active.thumbnailDataUrl) {
+      embeddedThumbDone.current.add(active.id)
       return
     }
     embeddedThumbDone.current.add(active.id)
@@ -571,6 +589,21 @@ export default function App() {
               className="h-full w-full"
               onError={handleViewerError}
             />
+          ) : openingSlide ? (
+            <div className="flex h-full items-center justify-center px-8 text-[#111827]">
+              <section
+                className="w-full max-w-sm rounded-lg border border-[#d7dde7] bg-[#f7f9fc] px-5 py-4 text-center shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="text-xs font-bold uppercase tracking-normal text-[#526078]">Preparing slide</div>
+                <h2 className="mt-2 truncate text-sm font-semibold" title={openingSlide.title}>{openingSlide.title}</h2>
+                <p className="mt-2 text-xs leading-5 text-[#526078]">{openingSlide.detail}</p>
+                <div className="mt-4 h-1 overflow-hidden rounded-full bg-[#dfe5ee]">
+                  <div className="h-full w-2/5 animate-pulse rounded-full bg-[#6b7890]" />
+                </div>
+              </section>
+            </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-6 px-8 text-sm">
               <img

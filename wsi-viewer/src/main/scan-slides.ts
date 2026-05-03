@@ -3,6 +3,7 @@ import { join, extname, relative, basename, dirname, posix as pathPosix } from '
 import { stat } from 'node:fs/promises'
 import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { ScannedSlide } from '../shared/types'
+import { readEmbeddedLabelThumbnailDataUrl } from './embedded-label-thumbnail'
 import { ZIP_DEFLATED, ZIP_STORED, listZipEntries, makeZipEntrySource, readZipEntryBuffer, readZipTextEntry } from './zip-source'
 
 const TIFF_WSI_EXTS = new Set([
@@ -179,6 +180,21 @@ async function readEvidenceThumbnailDataUrl(slidePath: string): Promise<string |
     if (data.length > 0) {
       return `data:${mime};base64,${data.toString('base64')}`
     }
+  }
+  return undefined
+}
+
+/** Evidence label image first; else embedded WSI label strip (same source as viewer sidebar when slide selected). */
+async function resolveListThumbnailDataUrl(
+  absolutePath: string,
+  labelThumbnailCacheRoot?: string,
+): Promise<string | undefined> {
+  const fromEvidence = await readEvidenceThumbnailDataUrl(absolutePath)
+  if (fromEvidence) {
+    return fromEvidence
+  }
+  if (labelThumbnailCacheRoot) {
+    return readEmbeddedLabelThumbnailDataUrl(absolutePath, labelThumbnailCacheRoot)
   }
   return undefined
 }
@@ -415,10 +431,16 @@ async function readZipLabelImageDataUrl(
   return undefined
 }
 
+export type ScanForSlidesOptions = {
+  /** When set, slides without an Evidence-folder label image use embedded TIFF/NDPI label (matches selected-row thumbnail). */
+  labelThumbnailCacheRoot?: string
+}
+
 /**
  * Recursively list all WSI files under @param root
  */
-export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
+export async function scanForSlides(root: string, options?: ScanForSlidesOptions): Promise<ScannedSlide[]> {
+  const cacheRoot = options?.labelThumbnailCacheRoot
   const out: ScannedSlide[] = []
   async function addZipSlides(zipPath: string) {
     const zipStat = await stat(zipPath).catch(() => null)
@@ -432,7 +454,10 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
       const fileName = zipBasename(entry.fileName)
       const source = makeZipEntrySource(zipPath, entry.fileName)
       const meta = await readZipSlideLabelMeta(zipPath, entry.fileName, zipEntryNames, wsiEntries.length === 1)
-      const thumbnailDataUrl = await readZipLabelImageDataUrl(zipPath, entry.fileName, zipEntryNames, wsiEntries.length === 1)
+      let thumbnailDataUrl = await readZipLabelImageDataUrl(zipPath, entry.fileName, zipEntryNames, wsiEntries.length === 1)
+      if (!thumbnailDataUrl) {
+        thumbnailDataUrl = await resolveListThumbnailDataUrl(source, cacheRoot)
+      }
       const unsupportedReason = entry.encrypted
         ? 'ZIP slide entry is encrypted. Use an unencrypted ZIP.'
         : entry.compressionMethod === ZIP_STORED || entry.compressionMethod === ZIP_DEFLATED
@@ -490,7 +515,7 @@ export async function scanForSlides(root: string): Promise<ScannedSlide[]> {
           relativeToSlides: rel,
           ext: extname(e.name).toLowerCase(),
           sizeBytes: s.size,
-          thumbnailDataUrl: await readEvidenceThumbnailDataUrl(p),
+          thumbnailDataUrl: await resolveListThumbnailDataUrl(p, cacheRoot),
         })
       }
     }

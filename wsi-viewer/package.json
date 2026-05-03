@@ -26,11 +26,16 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "dist:usb:tauri": "npm run tauri:build && npm run usb:assemble:tauri"
+    "dist:usb:tauri": "npm run tauri:build && npm run usb:assemble:tauri",
+    "electrobun:renderer": "vite build --config vite.config.electrobun.ts",
+    "electrobun:build": "npm run electrobun:renderer && electrobun build --env=stable",
+    "usb:assemble:electrobun": "npm run start-here:embed && bash scripts/assemble-usb-electrobun-production.sh",
+    "dist:usb:electrobun": "bash scripts/build-and-assemble-electrobun.sh"
   },
   "dependencies": {
     "@conflux-xyz/openslide-wasm": "^2.3.0",
     "clsx": "^2.1.1",
+    "electrobun": "^1.18.0",
     "lucide-react": "^0.468.0",
     "openseadragon": "5.0.1",
     "react": "^18.3.1",
@@ -42,6 +47,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.184.0",
     "@types/yauzl": "^2.10.3",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",

@@ -8,4 +8,5 @@ declare module '*.png' {
 /// <reference types="vite/client" />
 interface ImportMetaEnv {
   readonly VITE_TAURI?: string
+  readonly VITE_ELECTROBUN?: string
 }

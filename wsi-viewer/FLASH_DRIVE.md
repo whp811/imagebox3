@@ -5,7 +5,7 @@
 - You **copy the app onto a USB stick** (or encrypted drive) **once** — from a build machine or a provided zip.
 - The **user does not download** anything from the internet to use it.
 - They **open the app from the drive** and view slides. **Slide files stay on the drive** (in the `Slides` folder); the app reads them in place and does **not** copy whole slides off the volume.
-- The app is configured so **Electron’s own profile and cache** also live **next to the app** on that drive (hidden folder `.wsi-hive-data`), not under the user’s home directory.
+- The app is configured so the desktop shell profile/cache also lives **next to the app** on that drive (hidden folder `.wsi-hive-data`), not under the user’s home directory.
 
 ## Folder layout on the stick
 
@@ -18,6 +18,7 @@ USB root/
     … slide files …
   WSI Hive.app      ← visible on Mac, hidden on Windows
   WSI Hive.exe      ← visible on Windows, hidden on Mac (Finder)
+  .installer/       ← hidden Electrobun Windows sidecar when using Electrobun
 ```
 
 `Start Here.html` is the user-facing guide (text and embedded images only — no separate asset folder on the stick). Browsers cannot launch the native app from the page; on **Windows** users double-click **`WSI Hive.exe`**, and on **macOS** they double-click **`WSI Hive.app`** in Finder.
@@ -27,10 +28,12 @@ The **application itself** is a **single native package per platform** (no `win-
 - **Windows:** one portable `.exe` (`WSI Hive.exe` in `release/WSI-Hive-USB/`). All app resources are **inside** that file; the OS may use `%TEMP%` for extraction while running — that is outside your USB, not a second “app folder” you ship.
 - **macOS:** one `WSI Hive.app` **bundle** — in Finder it looks like **a single app icon** (a package folder under the hood).
 
+For the Electrobun USB build, Windows artifacts may also require a hidden `.installer/` sidecar folder next to `WSI Hive.exe`; the Electrobun assembler copies and hides it automatically when present.
+
 Also on the same volume, **next to** the executable / `.app`, keep:
 
 - **`Slides\`** (or `Slides/`) — put .svs / .ndpi / .tif / … here.
-- **ZIP bundles are supported** under `Slides/`: put the raw WSI and small `Evidence/` folder in one `.zip`. First scan reads only small Evidence text/image files for slide ID, stain, and label thumbnail; it skips raw WSI bytes. Stored/no-compression WSI entries open directly (`zip -0 slide.zip slide.svs metadata.json`). Deflated/compressed WSI entries are extracted on first open into `.wsi-hive-data/zip-cache` and reused while the source ZIP is unchanged.
+- **ZIP bundles are supported** under `Slides/`: put the raw WSI and small `Evidence/` folder in one `.zip`. First scan reads only small Evidence text/image files for slide ID, stain, and label thumbnail; it skips raw WSI bytes. Stored/no-compression WSI entries open directly (`zip -0 slide.zip slide.svs metadata.json`). Deflated/compressed WSI entries are extracted on first open into `.wsi-hive-data/zip-cache` and reused while the source ZIP is unchanged. The USB assembler rewrites bundled ZIP WSI entries to stored/no-compression so handout slides open directly instead of unpacking on first click.
 - **`.wsi-hive-data\`** — **created on first run** (cache, settings on the drive; dot-prefixed so it is hidden in many file managers; Windows builds also mark it hidden in Explorer).
 
 ```text
@@ -61,12 +64,14 @@ E:\
 
 ## If something writes outside the drive
 
-- **Slide pixels:** read through the in-app `wsi://` handler from the file path you chose; they are not uploaded.
-- **Electron data:** packaged builds set `userData` / `cache` to `.wsi-hive-data` **next to the app** (see `src/main/index.ts`).
+- **Slide pixels:** read through the in-app `wsi://` handler, or Electrobun's local `127.0.0.1` range server, from the file path you chose; they are not uploaded.
+- **Desktop shell data:** packaged builds set cache/state to `.wsi-hive-data` **next to the app**.
 - **OS temp:** the OS may still use `/tmp` or `%TEMP%` for tiny transient buffers; that is normal and is not your slide library.
 
 ## Building the copy that goes on the stick
 
 On your machine: `cd wsi-viewer && npm run dist:usb`, then copy the **contents** of `release/WSI-Hive-USB/` to the USB root. **Do not** require the end user to run `npm` or install Node.
+
+For Electrobun: `cd wsi-viewer && bash scripts/build-and-assemble-electrobun.sh`, then copy the **contents** of `release/Electrobun-WSI-Hive-USB/` to the USB root. Build on both macOS and Windows when you need both native launchers in one folder; rerun with `ELECTROBUN_SKIP_BUILD=1` after copying the second platform artifact into `artifacts-electrobun/`.
 
 The assembler hides `WSI Hive.exe` in Finder using **`SetFile -a V` only** (not `chflags`), so ExFAT sticks stay visible in Explorer on Windows. When the bundle is finalized on Windows, **`WSI Hive.app`** gets the Explorer hidden attribute so the root looks like Start Here + Slides + the Windows app.

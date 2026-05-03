@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createWriteStream } from 'node:fs'
-import { mkdir, rename, stat, unlink } from 'node:fs/promises'
+import { mkdir, open as openFile, rename, stat, unlink } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, posix as pathPosix } from 'node:path'
 import * as yauzl from 'yauzl'
@@ -22,6 +22,7 @@ export type ZipEntryInfo = {
   uncompressedSize: number
   compressionMethod: number
   encrypted: boolean
+  localHeaderOffset: number
 }
 
 type ZipEntryCache = {
@@ -81,6 +82,7 @@ export async function listZipEntries(zipPath: string): Promise<ZipEntryInfo[]> {
           uncompressedSize: entry.uncompressedSize,
           compressionMethod: entry.compressionMethod,
           encrypted: entry.isEncrypted(),
+          localHeaderOffset: entry.relativeOffsetOfLocalHeader,
         })
       }
       zipfile.readEntry()
@@ -130,20 +132,29 @@ function openZipEntryReadStream(
             zipfile.readEntry()
             return
           }
-          const streamOptions = {
-            start: options?.start ?? null,
-            end: options?.end ?? null,
-            decompress: options?.decompress ?? null,
-            decrypt: null,
+          const streamOptions: { start?: number, end?: number, decompress?: boolean } = {}
+          if (options?.start !== undefined) {
+            streamOptions.start = options.start
           }
-          zipfile.openReadStream(entry, streamOptions, (err, stream) => {
+          if (options?.end !== undefined) {
+            streamOptions.end = options.end
+          }
+          if (options?.decompress !== undefined) {
+            streamOptions.decompress = options.decompress
+          }
+          const onStream = (err: Error | null, stream: Readable) => {
             if (err || !stream) {
               fail(err || new Error(`Could not read ZIP entry: ${entryName}`))
               return
             }
             settled = true
             resolve({ zipfile, stream })
-          })
+          }
+          if (Object.keys(streamOptions).length > 0) {
+            zipfile.openReadStream(entry, streamOptions as any, onStream)
+          } else {
+            zipfile.openReadStream(entry, onStream)
+          }
         })
         zipfile.once('end', () => {
           fail(new Error(`ZIP entry not found: ${entryName}`))
@@ -211,15 +222,22 @@ export async function readStoredZipEntryRange(
   if (info.compressionMethod !== ZIP_STORED) {
     throw new Error('ZIP slide entries must be stored without compression for WSI range reads')
   }
-  const { zipfile, stream } = await openZipEntryReadStream(zipPath, entryName, {
-    start,
-    end: endInclusive + 1,
-    decompress: false,
-  })
+  const handle = await openFile(zipPath, 'r')
   try {
-    return await streamToBuffer(stream, endInclusive - start + 1)
+    const localHeader = Buffer.alloc(30)
+    const headerRead = await handle.read(localHeader, 0, localHeader.length, info.localHeaderOffset)
+    if (headerRead.bytesRead !== localHeader.length || localHeader.readUInt32LE(0) !== 0x04034b50) {
+      throw new Error(`Invalid ZIP local header for ${entryName}`)
+    }
+    const fileNameLength = localHeader.readUInt16LE(26)
+    const extraFieldLength = localHeader.readUInt16LE(28)
+    const dataOffset = info.localHeaderOffset + localHeader.length + fileNameLength + extraFieldLength
+    const length = endInclusive - start + 1
+    const buf = Buffer.alloc(length)
+    const result = await handle.read(buf, 0, length, dataOffset + start)
+    return buf.subarray(0, result.bytesRead)
   } finally {
-    zipfile.close()
+    await handle.close().catch(() => undefined)
   }
 }
 

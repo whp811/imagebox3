@@ -56,6 +56,7 @@ dependencies = [
  "http",
  "http-range",
  "log",
+ "png 0.17.16",
  "regex",
  "serde",
  "serde_json",

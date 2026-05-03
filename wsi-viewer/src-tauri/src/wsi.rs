@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 
 use crate::zip_ops::{get_zip_entry_info, parse_zip_entry_source, read_stored_zip_entry_range};
 
-const MAX_FULL_FILE_BYTES: u64 = 16 * 1024 * 1024;
+/// Plain-path GET-without-Range reads whole file up to this cap (materialized slides; some webviews omit Range on custom schemes).
+const MAX_PLAIN_READ_ALL_BYTES: u64 = 12 * 1024 * 1024 * 1024;
 
 fn path_from_uri(uri: &http::Uri) -> Result<String, ()> {
   let p = uri.path().trim_start_matches('/');
@@ -85,7 +86,12 @@ pub fn handle_wsi_request<B>(request: http::Request<B>) -> Result<Response<Vec<u
 }
 
 fn cors_builder(builder: http::response::Builder) -> http::response::Builder {
-  builder.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+  builder
+    .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+    .header(
+      "Access-Control-Expose-Headers",
+      "Content-Range, Content-Length, Accept-Ranges",
+    )
 }
 
 fn response_plain(status: StatusCode, msg: &str) -> Result<Response<Vec<u8>>, String> {
@@ -193,14 +199,10 @@ fn get_zip_response(
         .unwrap(),
     );
   }
-  if file_size > MAX_FULL_FILE_BYTES {
-    return Ok(
-      cors_builder(Response::builder().status(StatusCode::RANGE_NOT_SATISFIABLE))
-        .header(CONTENT_TYPE, "text/plain")
-        .header(CONTENT_RANGE, format!("bytes */{file_size}"))
-        .header(ACCEPT_RANGES, "bytes")
-        .body(b"Range header required for WSI files".to_vec())
-        .unwrap(),
+  if file_size > MAX_PLAIN_READ_ALL_BYTES {
+    return response_plain(
+      StatusCode::RANGE_NOT_SATISFIABLE,
+      "ZIP slide too large for full read without Range; use stored ZIP or Range-capable client",
     );
   }
   let data =
@@ -221,12 +223,23 @@ fn get_plain_file_response(path: &Path, range_hdr: Option<&str>) -> Result<Respo
     return response_plain(StatusCode::BAD_REQUEST, "Not a file");
   }
   let file_size = meta.len();
+  if file_size == 0 {
+    return Ok(
+      cors_builder(Response::builder().status(StatusCode::OK))
+        .header(CONTENT_TYPE, "application/octet-stream")
+        .header(CONTENT_LENGTH, "0")
+        .header(ACCEPT_RANGES, "bytes")
+        .body(vec![])
+        .unwrap(),
+    );
+  }
   if let Some(rh) = range_hdr {
     let ranges = HttpRange::parse(rh, file_size).map_err(|_| "Bad range".to_string())?;
     let r = ranges.get(0).ok_or_else(|| "Bad range".to_string())?;
-    let start = r.start;
-    let end = r.start + r.length - 1;
-    if start >= file_size || end >= file_size || end < start {
+    if r.length == 0 {
+      return Err("Bad range".to_string());
+    }
+    if r.start >= file_size {
       return Ok(
         cors_builder(Response::builder().status(StatusCode::RANGE_NOT_SATISFIABLE))
           .header(CONTENT_TYPE, "text/plain")
@@ -236,7 +249,19 @@ fn get_plain_file_response(path: &Path, range_hdr: Option<&str>) -> Result<Respo
           .unwrap(),
       );
     }
-    let end = end.min(file_size - 1);
+    let start = r.start;
+    let raw_end = r.start.saturating_add(r.length).saturating_sub(1);
+    let end = raw_end.min(file_size - 1);
+    if start > end {
+      return Ok(
+        cors_builder(Response::builder().status(StatusCode::RANGE_NOT_SATISFIABLE))
+          .header(CONTENT_TYPE, "text/plain")
+          .header(CONTENT_RANGE, format!("bytes */{file_size}"))
+          .header(ACCEPT_RANGES, "bytes")
+          .body(vec![])
+          .unwrap(),
+      );
+    }
     let len = (end - start + 1) as usize;
     let mut f = File::open(path).map_err(|e| e.to_string())?;
     f.seek(SeekFrom::Start(start)).map_err(|e| e.to_string())?;
@@ -252,14 +277,10 @@ fn get_plain_file_response(path: &Path, range_hdr: Option<&str>) -> Result<Respo
         .unwrap(),
     );
   }
-  if file_size > MAX_FULL_FILE_BYTES {
-    return Ok(
-      cors_builder(Response::builder().status(StatusCode::RANGE_NOT_SATISFIABLE))
-        .header(CONTENT_TYPE, "text/plain")
-        .header(CONTENT_RANGE, format!("bytes */{file_size}"))
-        .header(ACCEPT_RANGES, "bytes")
-        .body(b"Range header required for WSI files".to_vec())
-        .unwrap(),
+  if file_size > MAX_PLAIN_READ_ALL_BYTES {
+    return response_plain(
+      StatusCode::RANGE_NOT_SATISFIABLE,
+      "Slide file too large for GET without Range on this build",
     );
   }
   let mut f = File::open(path).map_err(|e| e.to_string())?;

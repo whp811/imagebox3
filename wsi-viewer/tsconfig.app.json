@@ -23,5 +23,5 @@
       "@/*": ["./src/renderer/*"]
     }
   },
-  "include": ["src/renderer", "src/preload", "src/shared", "src/main"]
+  "include": ["src/renderer", "src/preload", "src/shared", "src/main", "src/electrobun"]
 }
