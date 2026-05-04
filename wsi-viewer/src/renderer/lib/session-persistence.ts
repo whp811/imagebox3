@@ -14,7 +14,6 @@ const STORAGE_PREFIX = 'wsi-hive:'
 const HEARTBEAT_KEY = `${STORAGE_PREFIX}heartbeat`
 const LEGAL_KEY = `${STORAGE_PREFIX}legal-accepted-at`
 const ACTIVE_SLIDE_KEY = `${STORAGE_PREFIX}active-slide-id`
-const SLIDES_FOLDER_KEY = `${STORAGE_PREFIX}slides-folder`
 const SIDEBAR_KEY = `${STORAGE_PREFIX}sidebar-open`
 
 const HEARTBEAT_INTERVAL_MS = 4_000
@@ -55,12 +54,14 @@ export function startHeartbeat(): () => void {
   const tick = () => safeSet(HEARTBEAT_KEY, String(Date.now()))
   tick()
   const id = window.setInterval(tick, HEARTBEAT_INTERVAL_MS)
-  // Clear the marker on graceful page teardown so a clean app quit followed
-  // by a quick relaunch does not look like a crash recovery. WebContent
-  // process *crashes* skip pagehide/beforeunload, so this only fires on
-  // intentional close.
+  // Clear the heartbeat AND the active-slide on graceful page teardown so a
+  // clean app quit followed by a relaunch starts cold, without "Reconnecting…"
+  // splash and without surprise re-opening of the last slide. WebContent
+  // process *crashes* skip pagehide/beforeunload, so on a real crash both
+  // markers survive and trigger silent recovery.
   const onTeardown = () => {
     safeDel(HEARTBEAT_KEY)
+    safeDel(ACTIVE_SLIDE_KEY)
   }
   window.addEventListener('pagehide', onTeardown)
   window.addEventListener('beforeunload', onTeardown)
@@ -79,10 +80,6 @@ export function detectCrashRecovery(): boolean {
   const last = Number.parseInt(raw, 10)
   if (!Number.isFinite(last)) return false
   return Date.now() - last <= RECOVERY_WINDOW_MS
-}
-
-export function clearCrashRecoveryMarker(): void {
-  safeDel(HEARTBEAT_KEY)
 }
 
 export function rememberLegalAcceptance(): void {
@@ -104,15 +101,6 @@ export function rememberActiveSlide(id: string | null): void {
 
 export function readActiveSlide(): string | null {
   return safeGet(ACTIVE_SLIDE_KEY)
-}
-
-export function rememberSlidesFolder(path: string | null): void {
-  if (path) safeSet(SLIDES_FOLDER_KEY, path)
-  else safeDel(SLIDES_FOLDER_KEY)
-}
-
-export function readSlidesFolder(): string | null {
-  return safeGet(SLIDES_FOLDER_KEY)
 }
 
 export function rememberSidebar(open: boolean): void {

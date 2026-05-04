@@ -2,11 +2,7 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
-import {
-  clearCrashRecoveryMarker,
-  detectCrashRecovery,
-  startHeartbeat,
-} from './lib/session-persistence'
+import { detectCrashRecovery, startHeartbeat } from './lib/session-persistence'
 
 async function bootstrap() {
   if (import.meta.env.VITE_TAURI === '1') {
@@ -31,7 +27,6 @@ function ElectrobunBootstrapGate() {
       .then((m) => m.installElectrobunWsiApi())
       .then(() => {
         if (!cancelled) {
-          clearCrashRecoveryMarker()
           setPhase('ok')
         }
       })
