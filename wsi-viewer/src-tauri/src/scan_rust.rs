@@ -1,8 +1,9 @@
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use walkdir::WalkDir;
 
+use crate::embedded_label_thumbnail;
 use crate::types::ScannedSlide;
 use crate::zip_ops::{list_zip_entries, make_zip_entry_source, zip_basename};
 
@@ -31,12 +32,20 @@ fn ext_of(name: &str) -> String {
     .to_ascii_lowercase()
 }
 
-/// Subset of Electron `scanForSlides` — enough for Tauri shell parity on USB layouts.
-pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn std::error::Error + Send + Sync>> {
+/// Subset of Electron `scanForSlides` — USB layouts + embedded label thumbnails.
+pub fn scan_for_slides(
+  slides_root: &Path,
+  cache_root: &Path,
+) -> Result<Vec<ScannedSlide>, Box<dyn std::error::Error + Send + Sync>> {
   let _ = std::fs::create_dir_all(slides_root);
   let root = slides_root.to_path_buf();
 
-  fn push_plain(root: &Path, path: &Path, out: &mut Vec<ScannedSlide>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+  fn push_plain(
+    root: &Path,
+    path: &Path,
+    cache_root: &Path,
+    out: &mut Vec<ScannedSlide>,
+  ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let meta = std::fs::metadata(path)?;
     if !meta.is_file() {
       return Ok(());
@@ -51,6 +60,7 @@ pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn 
       .and_then(|s| s.to_str())
       .unwrap_or("")
       .to_string();
+    let thumb = embedded_label_thumbnail::read_embedded_label_thumbnail_data_url(&abs, cache_root);
     out.push(ScannedSlide {
       id: id_for_string(&abs),
       label: file_name.clone(),
@@ -66,13 +76,18 @@ pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn 
       zip_entry: None,
       zip_compression_method: None,
       requires_extraction: None,
-      thumbnail_data_url: None,
+      thumbnail_data_url: thumb,
       unsupported_reason: None,
     });
     Ok(())
   }
 
-  fn add_zip_slides(root: &Path, zip_path: &Path, out: &mut Vec<ScannedSlide>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+  fn add_zip_slides(
+    root: &Path,
+    zip_path: &Path,
+    cache_root: &Path,
+    out: &mut Vec<ScannedSlide>,
+  ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let entries = match list_zip_entries(zip_path) {
       Ok(e) => e,
       Err(_) => return Ok(()),
@@ -96,6 +111,7 @@ pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn 
         ))
       };
       let requires_extraction = Some(entry.compression_method == 8);
+      let thumb = embedded_label_thumbnail::read_embedded_label_thumbnail_data_url(&source, cache_root);
       out.push(ScannedSlide {
         id: id_for_string(&source),
         label: file_name.clone(),
@@ -111,7 +127,7 @@ pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn 
         zip_entry: Some(entry.file_name.clone()),
         zip_compression_method: Some(entry.compression_method),
         requires_extraction,
-        thumbnail_data_url: None,
+        thumbnail_data_url: thumb,
         unsupported_reason,
       });
     }
@@ -127,9 +143,9 @@ pub fn scan_for_slides(slides_root: &Path) -> Result<Vec<ScannedSlide>, Box<dyn 
     }
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
     if is_zip(name) {
-      add_zip_slides(&root, path, &mut out)?;
+      add_zip_slides(&root, path, cache_root, &mut out)?;
     } else if is_wsi_file(name) {
-      push_plain(&root, path, &mut out)?;
+      push_plain(&root, path, cache_root, &mut out)?;
     }
   }
 

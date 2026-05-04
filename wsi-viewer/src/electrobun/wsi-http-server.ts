@@ -1,3 +1,4 @@
+import { createReadStream } from 'node:fs'
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
@@ -5,7 +6,13 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { basename, posix as pathPosix } from 'node:path'
-import { ZIP_STORED, getZipEntryInfo, parseZipEntrySource, readStoredZipEntryRange } from '../main/zip-source'
+import {
+  ZIP_STORED,
+  getStoredZipEntryFileRange,
+  getZipEntryInfo,
+  parseZipEntrySource,
+  readStoredZipEntryRange,
+} from '../main/zip-source'
 
 const MAX_OPEN_FILES = 16
 const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024
@@ -17,6 +24,11 @@ type CachedFile = {
   inUse: number
   closeAfterUse: boolean
 }
+
+type RangeParseResult =
+  | { kind: 'missing' }
+  | { kind: 'invalid' }
+  | { kind: 'range', start: number, end: number }
 
 const openFiles = new Map<string, CachedFile>()
 
@@ -34,20 +46,21 @@ function displayNameFromSource(source: string): string {
   return zipSource ? pathPosix.basename(zipSource.entryName) : basename(source)
 }
 
-function parseRange(rangeHeader: string | undefined, size: number): { start: number, end: number } | null {
-  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) return null
-  const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader)
-  if (!match) return null
-  let start = match[1] ? parseInt(match[1], 10) : 0
-  let end = match[2] ? parseInt(match[2], 10) : size - 1
+function parseRange(rangeHeader: string | undefined, size: number): RangeParseResult {
+  if (!rangeHeader) return { kind: 'missing' }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+  if (!match || (match[1] === '' && match[2] === '')) return { kind: 'invalid' }
+  let start = match[1] ? Number.parseInt(match[1], 10) : 0
+  let end = match[2] ? Number.parseInt(match[2], 10) : size - 1
   if (match[1] === '' && match[2] !== '') {
-    const suffix = parseInt(match[2], 10)
+    const suffix = Number.parseInt(match[2], 10)
+    if (suffix <= 0) return { kind: 'invalid' }
     start = Math.max(0, size - suffix)
     end = size - 1
   }
   if (end >= size) end = size - 1
-  if (start < 0 || start > end) return null
-  return { start, end }
+  if (start < 0 || start >= size || start > end) return { kind: 'invalid' }
+  return { kind: 'range', start, end }
 }
 
 function closeCachedFile(entry: CachedFile) {
@@ -115,6 +128,40 @@ function send(res: ServerResponse, status: number, headers: Record<string, strin
   res.end(body)
 }
 
+function sendInvalidRange(res: ServerResponse, fileSize: number, sendBody: boolean) {
+  send(res, 416, {
+    'content-type': 'text/plain',
+    'content-range': `bytes */${fileSize}`,
+    'accept-ranges': 'bytes',
+  }, sendBody ? 'Requested range not satisfiable' : undefined)
+}
+
+function sendFileStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  headers: Record<string, string>,
+  source: string,
+  range?: { start: number, end: number },
+) {
+  const stream = createReadStream(source, range)
+  stream.once('error', (error) => {
+    if (!res.headersSent) {
+      send(res, 500, { 'content-type': 'text/plain' }, String(error))
+      return
+    }
+    res.destroy(error)
+  })
+  req.once('close', () => stream.destroy())
+  res.writeHead(200, {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, HEAD, OPTIONS',
+    'access-control-allow-headers': 'range, content-type',
+    'cache-control': 'no-store',
+    ...headers,
+  })
+  stream.pipe(res)
+}
+
 function sourceFromRequest(req: IncomingMessage): string | null {
   const url = new URL(req.url || '/', 'http://127.0.0.1')
   const prefix = '/wsi/'
@@ -150,13 +197,18 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
       return
     }
     const range = parseRange(req.headers.range, fileSize)
-    if (!range) {
+    if (range.kind === 'invalid') {
+      sendInvalidRange(res, fileSize, sendBody)
+      return
+    }
+    if (range.kind === 'missing') {
       if (fileSize > MAX_FULL_FILE_BYTES) {
-        send(res, 416, {
-          'content-type': 'text/plain',
-          'content-range': `bytes */${fileSize}`,
+        const fileRange = await getStoredZipEntryFileRange(zipSource.zipPath, zipSource.entryName)
+        sendFileStream(req, res, {
+          'content-length': String(fileSize),
+          'content-type': 'application/octet-stream',
           'accept-ranges': 'bytes',
-        }, sendBody ? 'Range header required for WSI files' : undefined)
+        }, zipSource.zipPath, { start: fileRange.start, end: fileRange.end })
         return
       }
       const data = sendBody
@@ -199,13 +251,17 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
     return
   }
   const range = parseRange(req.headers.range, fileSize)
-  if (!range) {
+  if (range.kind === 'invalid') {
+    sendInvalidRange(res, fileSize, sendBody)
+    return
+  }
+  if (range.kind === 'missing') {
     if (fileSize > MAX_FULL_FILE_BYTES) {
-      send(res, 416, {
-        'content-type': 'text/plain',
-        'content-range': `bytes */${fileSize}`,
+      sendFileStream(req, res, {
+        'content-length': String(fileSize),
+        'content-type': 'application/octet-stream',
         'accept-ranges': 'bytes',
-      }, sendBody ? 'Range header required for WSI files' : undefined)
+      }, source)
       return
     }
     const data = sendBody ? await readFile(source) : undefined

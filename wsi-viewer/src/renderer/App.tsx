@@ -421,7 +421,9 @@ export default function App() {
       <header
         className={cn(
           'app-drag flex h-12 shrink-0 items-center border-b border-border px-3',
-          platform === 'darwin' && 'pl-[88px]',
+          platform === 'darwin' &&
+            import.meta.env.VITE_ELECTROBUN !== '1' &&
+            'pl-[88px]',
           platform === 'win32' && 'pr-[150px]',
         )}
       >

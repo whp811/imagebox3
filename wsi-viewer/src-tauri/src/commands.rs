@@ -1,3 +1,4 @@
+use crate::embedded_label_thumbnail;
 use crate::paths;
 use crate::scan_rust;
 use crate::types::{ScannedSlide, SlidesInfo};
@@ -30,7 +31,9 @@ pub fn slides_rescan(state: State<'_, AppState>) -> Result<Vec<ScannedSlide>, St
   let session = state.session_slides_root.lock().map_err(|e| e.to_string())?;
   paths::ensure_slides_dir(session.as_deref());
   let root = paths::slides_root(session.as_deref());
-  scan_rust::scan_for_slides(&root).map_err(|e| e.to_string())
+  let _ = paths::ensure_cache_dir();
+  let cache = paths::cache_root_dir();
+  scan_rust::scan_for_slides(&root, &cache).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -43,6 +46,7 @@ pub fn wsi_path_to_url(absolute_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn wsi_embedded_label_thumbnail(_absolute_path: String) -> Option<String> {
-  None
+pub fn wsi_embedded_label_thumbnail(absolute_path: String) -> Option<String> {
+  let _ = paths::ensure_cache_dir();
+  embedded_label_thumbnail::read_embedded_label_thumbnail_data_url(&absolute_path, &paths::cache_root_dir())
 }

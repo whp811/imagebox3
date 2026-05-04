@@ -1,4 +1,5 @@
 mod commands;
+mod embedded_label_thumbnail;
 mod paths;
 mod scan_rust;
 mod types;

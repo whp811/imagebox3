@@ -241,6 +241,36 @@ export async function readStoredZipEntryRange(
   }
 }
 
+export async function getStoredZipEntryFileRange(
+  zipPath: string,
+  entryName: string,
+): Promise<{ start: number, end: number, size: number }> {
+  const info = await getZipEntryInfo(zipPath, entryName)
+  if (!info) {
+    throw new Error(`ZIP entry not found: ${entryName}`)
+  }
+  if (info.encrypted) {
+    throw new Error(`ZIP entry is encrypted: ${entryName}`)
+  }
+  if (info.compressionMethod !== ZIP_STORED) {
+    throw new Error('ZIP slide entries must be stored without compression for direct file reads')
+  }
+  const handle = await openFile(zipPath, 'r')
+  try {
+    const localHeader = Buffer.alloc(30)
+    const headerRead = await handle.read(localHeader, 0, localHeader.length, info.localHeaderOffset)
+    if (headerRead.bytesRead !== localHeader.length || localHeader.readUInt32LE(0) !== 0x04034b50) {
+      throw new Error(`Invalid ZIP local header for ${entryName}`)
+    }
+    const fileNameLength = localHeader.readUInt16LE(26)
+    const extraFieldLength = localHeader.readUInt16LE(28)
+    const start = info.localHeaderOffset + localHeader.length + fileNameLength + extraFieldLength
+    return { start, end: start + info.uncompressedSize - 1, size: info.uncompressedSize }
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
+}
+
 function zipCachePath(cacheRoot: string, zipPath: string, entryName: string, info: ZipEntryInfo, zipFingerprint: string) {
   const digest = createHash('sha256')
     .update(JSON.stringify([

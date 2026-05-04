@@ -11,7 +11,7 @@ const config: ElectrobunConfig = {
     buildFolder: 'build-electrobun',
     artifactFolder: 'artifacts-electrobun',
     bun: {
-      entrypoint: 'src/electrobun/main.ts',
+      entrypoint: 'src/electrobun/index.ts',
     },
     copy: {
       'dist-electrobun': 'views/renderer',

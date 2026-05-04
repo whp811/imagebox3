@@ -1,9 +1,17 @@
+import { createReadStream } from 'node:fs'
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
 import { basename, posix as pathPosix } from 'node:path'
+import { Readable } from 'node:stream'
 import { protocol } from 'electron'
-import { ZIP_STORED, getZipEntryInfo, parseZipEntrySource, readStoredZipEntryRange } from './zip-source'
+import {
+  ZIP_STORED,
+  getStoredZipEntryFileRange,
+  getZipEntryInfo,
+  parseZipEntrySource,
+  readStoredZipEntryRange,
+} from './zip-source'
 
 const SCHEME = 'wsi'
 const PRIVILEGED = [
@@ -19,6 +27,11 @@ type CachedFile = {
   inUse: number
   closeAfterUse: boolean
 }
+
+type RangeParseResult =
+  | { kind: 'missing' }
+  | { kind: 'invalid' }
+  | { kind: 'range', start: number, end: number }
 
 const openFiles = new Map<string, CachedFile>()
 
@@ -39,20 +52,21 @@ function displayNameFromSource(source: string): string {
   return zipSource ? pathPosix.basename(zipSource.entryName) : basename(source)
 }
 
-function parseRange(rangeHeader: string | null, size: number): { start: number, end: number } | null {
-  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) return null
-  const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader)
-  if (!m) return null
-  let start = m[1] ? parseInt(m[1], 10) : 0
-  let end = m[2] ? parseInt(m[2], 10) : size - 1
+function parseRange(rangeHeader: string | null, size: number): RangeParseResult {
+  if (!rangeHeader) return { kind: 'missing' }
+  const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+  if (!m || (m[1] === '' && m[2] === '')) return { kind: 'invalid' }
+  let start = m[1] ? Number.parseInt(m[1], 10) : 0
+  let end = m[2] ? Number.parseInt(m[2], 10) : size - 1
   if (m[1] === '' && m[2] !== '') {
-    const suffix = parseInt(m[2], 10)
+    const suffix = Number.parseInt(m[2], 10)
+    if (suffix <= 0) return { kind: 'invalid' }
     start = Math.max(0, size - suffix)
     end = size - 1
   }
   if (end >= size) end = size - 1
-  if (start < 0 || start > end) return null
-  return { start, end }
+  if (start < 0 || start >= size || start > end) return { kind: 'invalid' }
+  return { kind: 'range', start, end }
 }
 
 function closeCachedFile(entry: CachedFile) {
@@ -103,6 +117,22 @@ function releaseCachedFile(entry: CachedFile) {
   if (entry.inUse <= 0 && entry.closeAfterUse) {
     void entry.handle.close().catch(() => {})
   }
+}
+
+function streamBody(path: string, range?: { start: number, end: number }): BodyInit {
+  return Readable.toWeb(createReadStream(path, range)) as unknown as BodyInit
+}
+
+function invalidRangeResponse(fileSize: number): Response {
+  return new Response('Requested range not satisfiable', {
+    status: 416,
+    headers: {
+      'content-type': 'text/plain',
+      'content-range': `bytes */${fileSize}`,
+      'accept-ranges': 'bytes',
+      'access-control-allow-origin': '*',
+    },
+  })
 }
 
 export function registerWsiSchemesEarly() {
@@ -176,13 +206,17 @@ export function registerWsiFileHandler() {
       const fileSize = entry.uncompressedSize
       const r = request.headers.get('range')
       const pr = parseRange(r, fileSize)
-      if (!pr) {
+      if (pr.kind === 'invalid') {
+        return invalidRangeResponse(fileSize)
+      }
+      if (pr.kind === 'missing') {
         if (fileSize > MAX_FULL_FILE_BYTES) {
-          return new Response('Range header required for WSI files', {
-            status: 416,
+          const fileRange = await getStoredZipEntryFileRange(zipSource.zipPath, zipSource.entryName)
+          return new Response(streamBody(zipSource.zipPath, { start: fileRange.start, end: fileRange.end }), {
+            status: 200,
             headers: {
-              'content-type': 'text/plain',
-              'content-range': `bytes */${fileSize}`,
+              'content-length': String(fileSize),
+              'content-type': 'application/octet-stream',
               'accept-ranges': 'bytes',
               'access-control-allow-origin': '*',
             },
@@ -219,13 +253,16 @@ export function registerWsiFileHandler() {
     const fileSize = st.size
     const r = request.headers.get('range')
     const pr = parseRange(r, fileSize)
-    if (!pr) {
+    if (pr.kind === 'invalid') {
+      return invalidRangeResponse(fileSize)
+    }
+    if (pr.kind === 'missing') {
       if (fileSize > MAX_FULL_FILE_BYTES) {
-        return new Response('Range header required for WSI files', {
-          status: 416,
+        return new Response(streamBody(abs), {
+          status: 200,
           headers: {
-            'content-type': 'text/plain',
-            'content-range': `bytes */${fileSize}`,
+            'content-length': String(fileSize),
+            'content-type': 'application/octet-stream',
             'accept-ranges': 'bytes',
             'access-control-allow-origin': '*',
           },
