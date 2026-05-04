@@ -11,10 +11,18 @@ const TILE_READ_CONCURRENCY = IS_ELECTROBUN ? 1 : TILE_WORKERS
 const TILE_READ_QUEUE_MAX = IS_ELECTROBUN ? 8 : 64
 const WSI_SOURCE_RE = /\.(svs|tif|tiff|gtiff|ndpi)$/i
 const SHARED_CONTEXT_IDLE_MS = 15_000
+// Bound libopenslide internal cache + emscripten heap growth across a long
+// session. After this many slide opens, recycle the worker (terminate + spawn
+// fresh) on next release so the WebContent process never accumulates unbounded
+// WASM memory and crashes (which WKWebView would auto-recover by reloading the
+// page, looking like a full app restart to the user).
+const SHARED_CONTEXT_MAX_OPENS = IS_ELECTROBUN ? 8 : Infinity
 let sharedOpenSlidePromise = null
 let sharedOpenSlideContext = null
 let sharedOpenSlideReleaseId = null
 let sharedOpenSlideUsers = 0
+let sharedOpenSlideOpenCount = 0
+let sharedOpenSlideRecyclePending = false
 
 async function createOpenSlideContext(numWorkers) {
   const { default: OpenSlide } = await import('@conflux-xyz/openslide-wasm')
@@ -32,6 +40,8 @@ async function getOpenSlideContext(numWorkers) {
     sharedOpenSlideReleaseId = null
   }
   if (!sharedOpenSlidePromise) {
+    sharedOpenSlideOpenCount = 0
+    sharedOpenSlideRecyclePending = false
     sharedOpenSlidePromise = createOpenSlideContext(numWorkers)
       .then((os) => {
         sharedOpenSlideContext = os
@@ -43,7 +53,19 @@ async function getOpenSlideContext(numWorkers) {
         throw error
       })
   }
+  sharedOpenSlideOpenCount += 1
+  if (sharedOpenSlideOpenCount >= SHARED_CONTEXT_MAX_OPENS) {
+    sharedOpenSlideRecyclePending = true
+  }
   return sharedOpenSlidePromise
+}
+
+function terminateOpenSlideContext(os) {
+  try {
+    os?.workers?.forEach((w) => w.worker?.terminate?.())
+  } catch {
+    /* ignore */
+  }
 }
 
 function invalidateSharedOpenSlideContext(os) {
@@ -54,9 +76,11 @@ function invalidateSharedOpenSlideContext(os) {
   if (sharedOpenSlideContext === os) {
     sharedOpenSlidePromise = null
     sharedOpenSlideContext = null
+    sharedOpenSlideOpenCount = 0
+    sharedOpenSlideRecyclePending = false
   }
   if (sharedOpenSlideUsers <= 0) {
-    os?.workers?.forEach((w) => w.worker?.terminate?.())
+    terminateOpenSlideContext(os)
   }
 }
 
@@ -66,12 +90,25 @@ function releaseSharedOpenSlideContext(os) {
   }
   if (sharedOpenSlideReleaseId) {
     window.clearTimeout(sharedOpenSlideReleaseId)
+    sharedOpenSlideReleaseId = null
+  }
+  // If we hit the recycle threshold, terminate immediately rather than wait for
+  // idle. Next open will spin up a fresh worker with a fresh WASM heap.
+  if (sharedOpenSlideRecyclePending) {
+    sharedOpenSlidePromise = null
+    sharedOpenSlideContext = null
+    sharedOpenSlideOpenCount = 0
+    sharedOpenSlideRecyclePending = false
+    terminateOpenSlideContext(os)
+    return
   }
   sharedOpenSlideReleaseId = window.setTimeout(() => {
     if (sharedOpenSlideContext === os && sharedOpenSlideUsers <= 0) {
       sharedOpenSlidePromise = null
       sharedOpenSlideContext = null
-      os?.workers?.forEach((w) => w.worker?.terminate?.())
+      sharedOpenSlideOpenCount = 0
+      sharedOpenSlideRecyclePending = false
+      terminateOpenSlideContext(os)
     }
     sharedOpenSlideReleaseId = null
   }, SHARED_CONTEXT_IDLE_MS)

@@ -19,6 +19,14 @@ import { parseSlidePackageName } from '../shared/slide-package-meta'
 import type { PickSlidesFolderResult, ScannedSlide, SlidesInfo } from '../shared/types'
 import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
+import {
+  legalAcceptanceFresh,
+  readActiveSlide,
+  readSidebar,
+  rememberActiveSlide,
+  rememberLegalAcceptance,
+  rememberSidebar,
+} from './lib/session-persistence'
 
 const uhnLabsLogoUrl = `${import.meta.env.BASE_URL || './'}logo-Labs.svg`
 const runtimeThumbnailStringLimit = import.meta.env.VITE_ELECTROBUN === '1' ? 24 : 120
@@ -239,14 +247,17 @@ export default function App() {
   const [info, setInfo] = useState<SlidesInfo | null>(null)
   const [slides, setSlides] = useState<ScannedSlide[]>([])
   const [loading, setLoading] = useState(true)
-  const [sidebar, setSidebar] = useState(true)
+  const [sidebar, setSidebar] = useState<boolean>(() => readSidebar())
   const [showSlidesRoot, setShowSlidesRoot] = useState(false)
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
   const [openingSlide, setOpeningSlide] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
-  const [showLegalNotice, setShowLegalNotice] = useState(true)
+  // Skip the legal notice if it was already accepted recently (e.g. after a
+  // WebContent-process crash auto-reload). Avoids the user perceiving the
+  // recovery as a full app restart.
+  const [showLegalNotice, setShowLegalNotice] = useState<boolean>(() => !legalAcceptanceFresh())
   const [showUsageGuide, setShowUsageGuide] = useState(false)
   const [showChangeFolderUnlocked, setShowChangeFolderUnlocked] = useState(false)
   const fallbackThumbDone = useRef<Set<string>>(new Set())
@@ -254,6 +265,7 @@ export default function App() {
   const openRequestId = useRef(0)
   const folderSecretTapCountRef = useRef(0)
   const folderSecretTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const restoreAttemptedRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -321,6 +333,8 @@ export default function App() {
       setActive(null)
       setWsiUrl(null)
       setOpeningSlide(false)
+      rememberActiveSlide(null)
+      restoreAttemptedRef.current = true
       await rescan()
     } catch (e) {
       setErr(String(e))
@@ -351,11 +365,13 @@ export default function App() {
       setWsiUrl(null)
       setOpeningSlide(false)
       setErr(sl.unsupportedReason)
+      rememberActiveSlide(null)
       return
     }
     setActive(sl)
     setWsiUrl(null)
     setOpeningSlide(true)
+    rememberActiveSlide(sl.id)
     try {
       const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
       if (openRequestId.current !== requestId) {
@@ -399,6 +415,32 @@ export default function App() {
   }, [slides])
 
   useEffect(() => {
+    rememberSidebar(sidebar)
+  }, [sidebar])
+
+  /** After a crash auto-recovery, re-open the previously active slide so the
+   *  user perceives a brief freeze rather than a full app reset. Runs once
+   *  per mount, after the first scan completes. */
+  useEffect(() => {
+    if (restoreAttemptedRef.current) return
+    if (loading) return
+    if (active) return
+    if (showLegalNotice) return
+    const lastId = readActiveSlide()
+    if (!lastId) {
+      restoreAttemptedRef.current = true
+      return
+    }
+    const match = slides.find((s) => s.id === lastId)
+    restoreAttemptedRef.current = true
+    if (match && !match.unsupportedReason) {
+      void openSlide(match)
+    } else {
+      rememberActiveSlide(null)
+    }
+  }, [loading, slides, active, showLegalNotice, openSlide])
+
+  useEffect(() => {
     if (!active || active.unsupportedReason || embeddedThumbDone.current.has(active.id)) {
       return
     }
@@ -430,9 +472,7 @@ export default function App() {
       <header
         className={cn(
           'app-drag flex h-12 shrink-0 items-center border-b border-border px-3',
-          platform === 'darwin' &&
-            import.meta.env.VITE_ELECTROBUN !== '1' &&
-            'pl-[88px]',
+          platform === 'darwin' && 'pl-[88px]',
           platform === 'win32' && 'pr-[150px]',
         )}
       >
@@ -631,6 +671,7 @@ export default function App() {
         <LegalClinicalNotice
           logoUrl={uhnLabsLogoUrl}
           onConfirm={() => {
+            rememberLegalAcceptance()
             setShowLegalNotice(false)
           }}
           onCancel={() => {

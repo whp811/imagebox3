@@ -2,6 +2,11 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
+import {
+  clearCrashRecoveryMarker,
+  detectCrashRecovery,
+  startHeartbeat,
+} from './lib/session-persistence'
 
 async function bootstrap() {
   if (import.meta.env.VITE_TAURI === '1') {
@@ -13,13 +18,22 @@ async function bootstrap() {
 function ElectrobunBootstrapGate() {
   const [phase, setPhase] = useState<'boot' | 'ok' | 'fail'>('boot')
   const [failMessage, setFailMessage] = useState('')
+  // Detect once, synchronously: was there a fresh heartbeat from a previous
+  // page instance? If yes, the WebContent process likely crashed and reloaded
+  // us — present this as a brief "Reconnecting…" freeze rather than a cold
+  // start so the user does not perceive an app restart.
+  const [recovering] = useState(() => detectCrashRecovery())
 
   useEffect(() => {
+    const stopHeartbeat = startHeartbeat()
     let cancelled = false
     void import('./install-electrobun-wsi')
       .then((m) => m.installElectrobunWsiApi())
       .then(() => {
-        if (!cancelled) setPhase('ok')
+        if (!cancelled) {
+          clearCrashRecoveryMarker()
+          setPhase('ok')
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -28,10 +42,26 @@ function ElectrobunBootstrapGate() {
       })
     return () => {
       cancelled = true
+      stopHeartbeat()
     }
   }, [])
 
   if (phase === 'boot') {
+    if (recovering) {
+      return (
+        <div
+          className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white px-6 text-center text-sm text-slate-700"
+          role="status"
+          aria-live="polite"
+          aria-label="Reconnecting"
+        >
+          <div className="h-1 w-64 overflow-hidden rounded-full bg-zinc-200">
+            <div className="h-full w-2/5 animate-pulse rounded-full bg-zinc-400" />
+          </div>
+          <p className="text-xs text-slate-500">Reconnecting…</p>
+        </div>
+      )
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-white px-6 text-center text-sm text-slate-700">
         <p className="font-medium text-slate-900">Starting WSI Hive…</p>

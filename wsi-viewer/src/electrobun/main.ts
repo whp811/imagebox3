@@ -91,6 +91,14 @@ function electorobunViewsRoot(): string {
 
 const viewsRoot = electorobunViewsRoot()
 
+/** Match Electron `src/main/index.ts`: client chrome under transparent title bar, not a second system bar. */
+const titleBarStyle =
+  process.platform === 'darwin' || process.platform === 'win32'
+    ? ('hiddenInset' as const)
+    : ('default' as const)
+const trafficLightOffset =
+  process.platform === 'darwin' ? ({ x: 16, y: 16 } as const) : ({ x: 0, y: 0 } as const)
+
 const win = new BrowserWindow({
   title: 'WSI Hive',
   frame: {
@@ -101,8 +109,8 @@ const win = new BrowserWindow({
   },
   url: 'views://renderer/index.html',
   viewsRoot,
-  // hiddenInset + FullSizeContentView can leave WKWebView with no visible content area in Electrobun dev.
-  titleBarStyle: 'default',
+  titleBarStyle,
+  trafficLightOffset,
   rpc,
 })
 

@@ -14,7 +14,10 @@ const isElectrobun = import.meta.env.VITE_ELECTROBUN === '1'
 const animationTime = isElectrobun ? 0.08 : 0.15
 const blendTime = isElectrobun ? 0 : 0.05
 const imageLoaderLimit = isElectrobun ? 2 : 5
-const maxImageCacheCount = isElectrobun ? 64 : 300
+// Smaller cache in WKWebView. Each entry is a 256² ARGB canvas (~256KB) +
+// IOSurface backing; aggregate cache across many slides was a contributor to
+// WebContent OOM crashes during long sessions.
+const maxImageCacheCount = isElectrobun ? 40 : 300
 const maxTilesPerFrame = isElectrobun ? 2 : 1
 const maxZoomPixelRatio = isElectrobun ? 1.75 : 4
 const minScrollDeltaTime = isElectrobun ? 70 : 50
@@ -39,14 +42,20 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
     const cleanup: Array<Promise<unknown>> = []
     if (viewerRef.current) {
       const viewer = viewerRef.current as ReturnType<typeof OpenSeadragon> & {
-        close?: () => void
-        tileCache?: { clear?: () => void }
+        drawer?: { canvas?: HTMLCanvasElement }
       }
+      // Capture the drawer canvas BEFORE destroy so we can null its backing
+      // store afterwards. OSD's own drawer.destroy() shrinks it to 1×1; we
+      // shrink to 0 for paranoia in WKWebView where IOSurface release lag
+      // contributed to long-session OOM crashes.
+      const drawerCanvas = viewer.drawer?.canvas
       viewerRef.current = null
       try {
-        viewer.close?.()
-        viewer.tileCache?.clear?.()
         viewer.destroy()
+        if (drawerCanvas) {
+          drawerCanvas.width = 0
+          drawerCanvas.height = 0
+        }
       } catch {
         /* */
       }
