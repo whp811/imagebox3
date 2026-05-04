@@ -20,6 +20,11 @@ const config: ElectrobunConfig = {
       codesign: false,
       notarize: false,
       createDmg: false,
+      // Same artwork as Electron (build/icon.icns); iconset is generated on macOS by ensure-electrobun-mac-iconset.cjs
+      icons: 'build/icon.iconset',
+    },
+    linux: {
+      icon: 'build/icon.png',
     },
     win: {
       icon: 'build/icon.ico',

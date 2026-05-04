@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -60,8 +61,58 @@ pub fn ensure_slides_dir(session_override: Option<&str>) -> PathBuf {
   p
 }
 
+fn home_dir() -> Option<PathBuf> {
+  env::var_os("HOME")
+    .or_else(|| env::var_os("USERPROFILE"))
+    .map(PathBuf::from)
+}
+
+fn can_use_cache_root(path: &Path) -> bool {
+  if fs::create_dir_all(path).is_err() {
+    return false;
+  }
+  let probe = path.join(".write-test");
+  if fs::write(&probe, b"ok").is_err() {
+    return false;
+  }
+  let _ = fs::remove_file(probe);
+  true
+}
+
+fn host_cache_root() -> Option<PathBuf> {
+  if cfg!(target_os = "macos") {
+    return home_dir().map(|home| home.join("Library").join("Caches").join("WSI Hive"));
+  }
+  if cfg!(target_os = "windows") {
+    let base = env::var_os("LOCALAPPDATA")
+      .map(PathBuf::from)
+      .or_else(|| home_dir().map(|home| home.join("AppData").join("Local")))?;
+    return Some(base.join("WSI Hive").join("Cache"));
+  }
+  let base = env::var_os("XDG_CACHE_HOME")
+    .map(PathBuf::from)
+    .or_else(|| home_dir().map(|home| home.join(".cache")))?;
+  Some(base.join("wsi-hive"))
+}
+
 pub fn cache_root_dir() -> PathBuf {
-  application_root_dir().join(".wsi-hive-data")
+  if let Ok(path) = env::var("WSI_HIVE_CACHE_ROOT") {
+    let p = PathBuf::from(path);
+    if can_use_cache_root(&p) {
+      return p;
+    }
+  }
+
+  let portable = application_root_dir().join(".wsi-hive-data");
+  if env::var("WSI_HIVE_FORCE_PORTABLE_CACHE").ok().as_deref() != Some("1") {
+    if let Some(host) = host_cache_root() {
+      if can_use_cache_root(&host) {
+        return host;
+      }
+    }
+  }
+
+  portable
 }
 
 pub fn ensure_cache_dir() -> std::io::Result<PathBuf> {
@@ -69,4 +120,12 @@ pub fn ensure_cache_dir() -> std::io::Result<PathBuf> {
   fs::create_dir_all(&p)?;
   fs::create_dir_all(p.join("zip-cache"))?;
   Ok(p)
+}
+
+pub fn clear_cache_dir() -> std::io::Result<()> {
+  let p = cache_root_dir();
+  if p.exists() {
+    fs::remove_dir_all(p)?;
+  }
+  Ok(())
 }

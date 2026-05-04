@@ -23,3 +23,5 @@ dist-tauri/
 dist-electrobun/
 build-electrobun/
 artifacts-electrobun/
+# Generated from build/icon.icns for Electrobun macOS bundles
+build/icon.iconset/

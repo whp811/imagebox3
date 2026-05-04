@@ -20,6 +20,8 @@ const LABEL_IMAGE_EXTS = new Set([
 ])
 const MAX_TEXT_META_BYTES = 512 * 1024
 const MAX_LABEL_IMAGE_BYTES = 3 * 1024 * 1024
+const DEFAULT_MAX_LIST_THUMBNAIL_BYTES = 512 * 1024
+const DEFAULT_MAX_SCAN_THUMBNAIL_CHARS = 16 * 1024 * 1024
 
 function isWsiFile(name: string) {
   return WSI_EXTS.has(extname(name).toLowerCase())
@@ -32,6 +34,20 @@ function isZipFile(name: string) {
 type SlideLabelMeta = {
   specimenId?: string
   stain?: string
+}
+
+function maxListThumbnailBytes() {
+  const raw = Number.parseInt(process.env.WSI_HIVE_MAX_LIST_THUMBNAIL_BYTES || '', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_LIST_THUMBNAIL_BYTES
+}
+
+function maxScanThumbnailChars() {
+  const raw = Number.parseInt(process.env.WSI_HIVE_MAX_SCAN_THUMBNAIL_CHARS || '', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_SCAN_THUMBNAIL_CHARS
+}
+
+function maxListThumbnailDataUrlChars() {
+  return Math.ceil(maxListThumbnailBytes() * 4 / 3) + 128
 }
 
 function firstMatch(text: string, patterns: RegExp[]) {
@@ -173,7 +189,7 @@ async function readEvidenceThumbnailDataUrl(slidePath: string): Promise<string |
       continue
     }
     const fileStat = await stat(path).catch(() => null)
-    if (!fileStat || fileStat.size > MAX_LABEL_IMAGE_BYTES) {
+    if (!fileStat || fileStat.size > Math.min(MAX_LABEL_IMAGE_BYTES, maxListThumbnailBytes())) {
       continue
     }
     const data = await readFile(path).catch(() => Buffer.alloc(0))
@@ -423,7 +439,7 @@ async function readZipLabelImageDataUrl(
     if (!mime) {
       continue
     }
-    const data = await readZipEntryBuffer(zipPath, entryName, MAX_LABEL_IMAGE_BYTES).catch(() => Buffer.alloc(0))
+    const data = await readZipEntryBuffer(zipPath, entryName, Math.min(MAX_LABEL_IMAGE_BYTES, maxListThumbnailBytes())).catch(() => Buffer.alloc(0))
     if (data.length > 0) {
       return `data:${mime};base64,${data.toString('base64')}`
     }
@@ -442,6 +458,19 @@ export type ScanForSlidesOptions = {
 export async function scanForSlides(root: string, options?: ScanForSlidesOptions): Promise<ScannedSlide[]> {
   const cacheRoot = options?.labelThumbnailCacheRoot
   const out: ScannedSlide[] = []
+  let thumbnailChars = 0
+  const thumbnailCharsMax = maxScanThumbnailChars()
+  const singleThumbnailCharsMax = maxListThumbnailDataUrlChars()
+  const keepScanThumbnail = (dataUrl?: string) => {
+    if (!dataUrl || dataUrl.length > singleThumbnailCharsMax) {
+      return undefined
+    }
+    if (thumbnailChars + dataUrl.length > thumbnailCharsMax) {
+      return undefined
+    }
+    thumbnailChars += dataUrl.length
+    return dataUrl
+  }
   async function addZipSlides(zipPath: string) {
     const zipStat = await stat(zipPath).catch(() => null)
     if (!zipStat?.isFile()) {
@@ -458,6 +487,7 @@ export async function scanForSlides(root: string, options?: ScanForSlidesOptions
       if (!thumbnailDataUrl) {
         thumbnailDataUrl = await resolveListThumbnailDataUrl(source, cacheRoot)
       }
+      thumbnailDataUrl = keepScanThumbnail(thumbnailDataUrl)
       const unsupportedReason = entry.encrypted
         ? 'ZIP slide entry is encrypted. Use an unencrypted ZIP.'
         : entry.compressionMethod === ZIP_STORED || entry.compressionMethod === ZIP_DEFLATED
@@ -515,7 +545,7 @@ export async function scanForSlides(root: string, options?: ScanForSlidesOptions
           relativeToSlides: rel,
           ext: extname(e.name).toLowerCase(),
           sizeBytes: s.size,
-          thumbnailDataUrl: await resolveListThumbnailDataUrl(p, cacheRoot),
+          thumbnailDataUrl: keepScanThumbnail(await resolveListThumbnailDataUrl(p, cacheRoot)),
         })
       }
     }

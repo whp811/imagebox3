@@ -21,6 +21,7 @@ import { WsiOsdView } from './components/WsiOsdView'
 import { cn } from './lib/utils'
 
 const uhnLabsLogoUrl = `${import.meta.env.BASE_URL || './'}logo-Labs.svg`
+const runtimeThumbnailStringLimit = import.meta.env.VITE_ELECTROBUN === '1' ? 24 : 120
 
 const noticeSections = [
   {
@@ -40,6 +41,18 @@ const noticeSections = [
     body: 'This thumb drive contains sensitive Personal Health Information (PHI). Please store it in a secure location. If lost or stolen, UHN is not responsible for unauthorized access to the data on this physical media.',
   },
 ]
+
+function capRuntimeThumbnailStrings(map: Record<string, string | null>) {
+  const stringKeys = Object.keys(map).filter((key) => typeof map[key] === 'string')
+  if (stringKeys.length <= runtimeThumbnailStringLimit) {
+    return map
+  }
+  const next = { ...map }
+  for (const key of stringKeys.slice(0, stringKeys.length - runtimeThumbnailStringLimit)) {
+    delete next[key]
+  }
+  return next
+}
 
 function slideLabelLines(slide: ScannedSlide) {
   const pathText = `${slide.relativeToSlides} ${slide.fileName || slide.label}`
@@ -230,7 +243,7 @@ export default function App() {
   const [showSlidesRoot, setShowSlidesRoot] = useState(false)
   const [active, setActive] = useState<ScannedSlide | null>(null)
   const [wsiUrl, setWsiUrl] = useState<string | null>(null)
-  const [openingSlide, setOpeningSlide] = useState<{ title: string, detail: string } | null>(null)
+  const [openingSlide, setOpeningSlide] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [showLegalNotice, setShowLegalNotice] = useState(true)
@@ -307,7 +320,7 @@ export default function App() {
       setInfo(r.info)
       setActive(null)
       setWsiUrl(null)
-      setOpeningSlide(null)
+      setOpeningSlide(false)
       await rescan()
     } catch (e) {
       setErr(String(e))
@@ -336,38 +349,32 @@ export default function App() {
     if (sl.unsupportedReason) {
       setActive(sl)
       setWsiUrl(null)
-      setOpeningSlide(null)
+      setOpeningSlide(false)
       setErr(sl.unsupportedReason)
       return
     }
-    const label = slideLabelLines(sl).join(' · ') || sl.label
     setActive(sl)
     setWsiUrl(null)
-    setOpeningSlide({
-      title: label,
-      detail: sl.requiresExtraction
-        ? 'Preparing this slide. The first open can take a few minutes on a USB drive.'
-        : 'Opening slide.',
-    })
+    setOpeningSlide(true)
     try {
       const u = await window.wsiApi.pathToWsiUrl(sl.absolutePath)
       if (openRequestId.current !== requestId) {
         return
       }
       setWsiUrl(u)
-      setOpeningSlide(null)
+      setOpeningSlide(false)
     } catch (e) {
       if (openRequestId.current !== requestId) {
         return
       }
       setWsiUrl(null)
-      setOpeningSlide(null)
+      setOpeningSlide(false)
       setErr(String(e))
     }
   }, [])
 
   const handleViewerError = useCallback((e: string) => {
-    setOpeningSlide(null)
+    setOpeningSlide(false)
     setErr(e)
   }, [])
 
@@ -403,10 +410,12 @@ export default function App() {
     void window.wsiApi
       .embeddedLabelThumbnail(active.absolutePath)
       .then((thumbnailDataUrl) => {
-        setThumbs((m) => ({
-          ...m,
-          [active.id]: thumbnailDataUrl || m[active.id] || null,
-        }))
+        setThumbs((m) => {
+          const next = { ...m }
+          delete next[active.id]
+          next[active.id] = thumbnailDataUrl || m[active.id] || null
+          return capRuntimeThumbnailStrings(next)
+        })
       })
       .catch(() => {
         setThumbs((m) => ({
@@ -592,19 +601,10 @@ export default function App() {
               onError={handleViewerError}
             />
           ) : openingSlide ? (
-            <div className="flex h-full items-center justify-center px-8 text-[#111827]">
-              <section
-                className="w-full max-w-sm rounded-lg border border-[#d7dde7] bg-[#f7f9fc] px-5 py-4 text-center shadow-sm"
-                role="status"
-                aria-live="polite"
-              >
-                <div className="text-xs font-bold uppercase tracking-normal text-[#526078]">Preparing slide</div>
-                <h2 className="mt-2 truncate text-sm font-semibold" title={openingSlide.title}>{openingSlide.title}</h2>
-                <p className="mt-2 text-xs leading-5 text-[#526078]">{openingSlide.detail}</p>
-                <div className="mt-4 h-1 overflow-hidden rounded-full bg-[#dfe5ee]">
-                  <div className="h-full w-2/5 animate-pulse rounded-full bg-[#6b7890]" />
-                </div>
-              </section>
+            <div className="flex h-full items-center justify-center px-8" role="status" aria-live="polite" aria-label="Loading slide">
+              <div className="h-1 w-64 overflow-hidden rounded-full bg-[#dfe5ee]">
+                <div className="h-full w-2/5 animate-pulse rounded-full bg-[#6b7890]" />
+              </div>
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-6 px-8 text-sm">

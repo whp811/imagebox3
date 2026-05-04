@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { execFile } from 'node:child_process'
-import { mkdirSync, readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { clearSessionCacheRoot, getCacheRootDir } from './cache-root'
 import { registerWsiFileHandler, registerWsiSchemesEarly, toWsiUrl } from './wsi-protocol'
 import {
   ensureSlidesDir,
@@ -18,21 +18,16 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 /**
- * Flash drive / portable: keep caches and profile next to the app (same volume as WSI data).
- * Prevents writing under ~/.config or %APPDATA% when the bundle runs from removable media.
+ * Flash drive / portable: keep slides next to the app, but put mutable caches on the host
+ * disk when possible. USB remains a fallback for locked-down machines.
  */
 if (app.isPackaged) {
   try {
-    const root = getApplicationRootDir()
-    const data = join(root, '.wsi-hive-data')
-    mkdirSync(data, { recursive: true })
-    if (process.platform === 'win32') {
-      execFile('attrib', ['+h', data], { windowsHide: true }, () => undefined)
-    }
+    const data = getCacheRootDir(getApplicationRootDir())
     app.setPath('userData', data)
     app.setPath('cache', join(data, 'cache'))
   } catch (e) {
-    console.warn('WSI Hive: could not set portable data paths', e)
+    console.warn('WSI Hive: could not set cache paths', e)
   }
 }
 
@@ -105,6 +100,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     setSlidesRootSessionOverride(null)
+    clearSessionCacheRoot()
   })
 }
 
@@ -163,6 +159,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   setSlidesRootSessionOverride(null)
+  clearSessionCacheRoot()
 })
 
 export {}

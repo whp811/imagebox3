@@ -8,6 +8,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Building Electrobun for Windows must be done on Windows; on macOS default to Mac-only USB unless overridden.
+if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ "${SKIP_WIN+set}" != set ]; then
+  export SKIP_WIN=1
+fi
 BUILD_DIR="${ELECTROBUN_BUILD_DIR:-$ROOT/build-electrobun}"
 ARTIFACTS_DIR="${ELECTROBUN_ARTIFACTS_DIR:-$ROOT/artifacts-electrobun}"
 OUT="${USB_OUT_ELECTROBUN:-$ROOT/release/Electrobun-WSI-Hive-USB}"

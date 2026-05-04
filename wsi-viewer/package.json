@@ -29,7 +29,7 @@
     "dist:usb:tauri": "npm run tauri:build && npm run usb:assemble:tauri",
     "electrobun:renderer": "vite build --config vite.config.electrobun.ts",
     "electrobun:dev": "node scripts/ensure-electrobun-renderer.cjs && electrobun dev",
-    "electrobun:build": "npm run electrobun:renderer && electrobun build --env=stable",
+    "electrobun:build": "node scripts/ensure-electrobun-mac-iconset.cjs && npm run electrobun:renderer && node scripts/electrobun-cli-build.cjs",
     "usb:assemble:electrobun": "npm run start-here:embed && bash scripts/assemble-usb-electrobun-production.sh",
     "dist:usb:electrobun": "bash scripts/build-and-assemble-electrobun.sh"
   },

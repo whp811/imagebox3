@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # One-shot: build Electrobun artifacts for this host, then assemble the USB folder.
-# To include both platforms, place the missing platform's Electrobun artifact in
-# artifacts-electrobun/ and rerun with ELECTROBUN_SKIP_BUILD=1.
+# macOS only builds the macOS Electrobun target (see scripts/electrobun-cli-build.cjs).
+# To add Windows to the USB folder, copy a Windows Electrobun zip into artifacts-electrobun/
+# or set ELECTROBUN_WIN_ZIP, then rerun with ELECTROBUN_SKIP_BUILD=1.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# USB assembly expects a Windows .exe unless SKIP_WIN=1 (see assemble-usb-electrobun-production.sh).
+if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && [ "${SKIP_WIN+set}" != set ]; then
+  export SKIP_WIN=1
+fi
 
 resolve_node() {
   if [ -n "${NODE_BIN:-}" ]; then
@@ -41,14 +47,10 @@ if [ ! -f "$VITE_CLI" ] || [ ! -f "$ELECTROBUN_CLI" ]; then
 fi
 
 if [ "${ELECTROBUN_SKIP_BUILD:-}" != "1" ]; then
+  "$NODE_BIN" "$ROOT/scripts/ensure-electrobun-mac-iconset.cjs"
   "$NODE_BIN" "$VITE_CLI" build --config "$ROOT/vite.config.electrobun.ts"
 
-  env_name="${ELECTROBUN_ENV:-stable}"
-  if [ -n "${ELECTROBUN_TARGETS:-}" ]; then
-    "$NODE_BIN" "$ELECTROBUN_CLI" build --env="$env_name" --targets="$ELECTROBUN_TARGETS"
-  else
-    "$NODE_BIN" "$ELECTROBUN_CLI" build --env="$env_name"
-  fi
+  "$NODE_BIN" "$ROOT/scripts/electrobun-cli-build.cjs"
 fi
 
 python3 "$ROOT/scripts/inline-start-here-assets.py"

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { BrowserView, BrowserWindow, Utils } from 'electrobun/bun'
 
 console.error('[wsi-hive] Electrobun main starting')
+import { clearSessionCacheRoot } from '../main/cache-root'
 import { readEmbeddedLabelThumbnailDataUrl } from '../main/embedded-label-thumbnail'
 import { scanForSlides } from '../main/scan-slides'
 import { materializeZipEntrySourceForViewing } from '../main/zip-source'
@@ -108,4 +109,5 @@ const win = new BrowserWindow({
 win.on('close', () => {
   setSlidesRootSessionOverride(null)
   wsiServer.close()
+  clearSessionCacheRoot()
 })

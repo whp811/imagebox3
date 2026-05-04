@@ -16,6 +16,7 @@ import {
 
 const MAX_OPEN_FILES = 16
 const MAX_FULL_FILE_BYTES = 16 * 1024 * 1024
+const ZIP_RANGE_CACHE_MAX = 64
 
 type CachedFile = {
   handle: FileHandle
@@ -31,6 +32,7 @@ type RangeParseResult =
   | { kind: 'range', start: number, end: number }
 
 const openFiles = new Map<string, CachedFile>()
+const storedZipRanges = new Map<string, { zipSize: number, zipMtimeMs: number, start: number, end: number, size: number }>()
 
 const enc = {
   encode: (p: string) =>
@@ -113,6 +115,29 @@ function releaseCachedFile(entry: CachedFile) {
   }
 }
 
+async function getCachedStoredZipEntryFileRange(zipPath: string, entryName: string, zipStat: Stats) {
+  const key = `${zipPath}\0${entryName}`
+  const cached = storedZipRanges.get(key)
+  if (cached && cached.zipSize === zipStat.size && cached.zipMtimeMs === zipStat.mtimeMs) {
+    storedZipRanges.delete(key)
+    storedZipRanges.set(key, cached)
+    return cached
+  }
+  const range = await getStoredZipEntryFileRange(zipPath, entryName)
+  const next = {
+    zipSize: zipStat.size,
+    zipMtimeMs: zipStat.mtimeMs,
+    ...range,
+  }
+  storedZipRanges.set(key, next)
+  while (storedZipRanges.size > ZIP_RANGE_CACHE_MAX) {
+    const oldest = storedZipRanges.keys().next().value as string | undefined
+    if (!oldest) break
+    storedZipRanges.delete(oldest)
+  }
+  return next
+}
+
 function send(res: ServerResponse, status: number, headers: Record<string, string>, body?: Buffer | string) {
   res.writeHead(status, {
     'access-control-allow-origin': '*',
@@ -142,6 +167,7 @@ function sendFileStream(
   headers: Record<string, string>,
   source: string,
   range?: { start: number, end: number },
+  status = 200,
 ) {
   const stream = createReadStream(source, range)
   stream.once('error', (error) => {
@@ -152,7 +178,51 @@ function sendFileStream(
     res.destroy(error)
   })
   req.once('close', () => stream.destroy())
-  res.writeHead(200, {
+  res.writeHead(status, {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, HEAD, OPTIONS',
+    'access-control-allow-headers': 'range, content-type',
+    'cache-control': 'no-store',
+    ...headers,
+  })
+  stream.pipe(res)
+}
+
+async function sendCachedFileStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  headers: Record<string, string>,
+  source: string,
+  fileStat: Stats,
+  range: { start: number, end: number },
+  status = 200,
+) {
+  const file = await acquireCachedFile(source, fileStat)
+  let released = false
+  const release = () => {
+    if (released) {
+      return
+    }
+    released = true
+    releaseCachedFile(file)
+  }
+  const stream = createReadStream('', {
+    fd: file.handle.fd,
+    autoClose: false,
+    start: range.start,
+    end: range.end,
+  })
+  stream.once('error', (error) => {
+    release()
+    if (!res.headersSent) {
+      send(res, 500, { 'content-type': 'text/plain' }, String(error))
+      return
+    }
+    res.destroy(error)
+  })
+  stream.once('close', release)
+  req.once('close', () => stream.destroy())
+  res.writeHead(status, {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET, HEAD, OPTIONS',
     'access-control-allow-headers': 'range, content-type',
@@ -177,6 +247,7 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
   const zipSource = parseZipEntrySource(source)
 
   if (zipSource) {
+    const zipStat = await stat(zipSource.zipPath)
     const entry = await getZipEntryInfo(zipSource.zipPath, zipSource.entryName)
     if (!entry) {
       send(res, 404, { 'content-type': 'text/plain' }, sendBody ? 'ZIP entry not found' : undefined)
@@ -203,12 +274,12 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
     }
     if (range.kind === 'missing') {
       if (fileSize > MAX_FULL_FILE_BYTES) {
-        const fileRange = await getStoredZipEntryFileRange(zipSource.zipPath, zipSource.entryName)
-        sendFileStream(req, res, {
+        const fileRange = await getCachedStoredZipEntryFileRange(zipSource.zipPath, zipSource.entryName, zipStat)
+        await sendCachedFileStream(req, res, {
           'content-length': String(fileSize),
           'content-type': 'application/octet-stream',
           'accept-ranges': 'bytes',
-        }, zipSource.zipPath, { start: fileRange.start, end: fileRange.end })
+        }, zipSource.zipPath, zipStat, { start: fileRange.start, end: fileRange.end })
         return
       }
       const data = sendBody
@@ -223,15 +294,13 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
     }
 
     const { start, end } = range
-    const data = sendBody
-      ? await readStoredZipEntryRange(zipSource.zipPath, zipSource.entryName, start, end)
-      : undefined
-    send(res, 206, {
+    const fileRange = await getCachedStoredZipEntryFileRange(zipSource.zipPath, zipSource.entryName, zipStat)
+    await sendCachedFileStream(req, res, {
       'content-type': 'application/octet-stream',
       'content-length': String(end - start + 1),
       'content-range': `bytes ${start}-${end}/${fileSize}`,
       'accept-ranges': 'bytes',
-    }, data)
+    }, zipSource.zipPath, zipStat, { start: fileRange.start + start, end: fileRange.start + end }, 206)
     return
   }
 
@@ -275,23 +344,12 @@ async function serveSource(req: IncomingMessage, res: ServerResponse, source: st
 
   const { start, end } = range
   const len = end - start + 1
-  let data: Buffer | undefined
-  if (sendBody) {
-    const buf = Buffer.alloc(len)
-    const file = await acquireCachedFile(source, fileStat)
-    try {
-      const result = await file.handle.read(buf, 0, len, start)
-      data = buf.subarray(0, result.bytesRead)
-    } finally {
-      releaseCachedFile(file)
-    }
-  }
-  send(res, 206, {
+  await sendCachedFileStream(req, res, {
     'content-type': 'application/octet-stream',
-    'content-length': String(data?.length ?? len),
+    'content-length': String(len),
     'content-range': `bytes ${start}-${end}/${fileSize}`,
     'accept-ranges': 'bytes',
-  }, data)
+  }, source, fileStat, { start, end }, 206)
 }
 
 export async function startWsiHttpServer(): Promise<{ baseUrl: string, close: () => void }> {
@@ -333,6 +391,7 @@ export async function startWsiHttpServer(): Promise<{ baseUrl: string, close: ()
         closeCachedFile(entry)
       }
       openFiles.clear()
+      storedZipRanges.clear()
     },
   }
 }

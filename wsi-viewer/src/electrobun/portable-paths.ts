@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, normalize, sep } from 'node:path'
+import { getCacheRootDir } from '../main/cache-root'
 
 let slidesRootSessionOverride: string | null = null
 let portableDataRoot: string | null = null
@@ -73,10 +73,6 @@ export function getPortableDataRoot(): string {
   if (portableDataRoot) {
     return portableDataRoot
   }
-  portableDataRoot = join(getApplicationRootDir(), '.wsi-hive-data')
-  mkdirSync(portableDataRoot, { recursive: true })
-  if (process.platform === 'win32') {
-    execFile('attrib', ['+h', portableDataRoot], { windowsHide: true }, () => undefined)
-  }
+  portableDataRoot = getCacheRootDir(getApplicationRootDir())
   return portableDataRoot
 }

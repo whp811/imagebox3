@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createWriteStream } from 'node:fs'
-import { mkdir, open as openFile, rename, stat, unlink } from 'node:fs/promises'
+import { mkdir, open as openFile, readdir, rename, stat, statfs, unlink, utimes } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, posix as pathPosix } from 'node:path'
 import * as yauzl from 'yauzl'
@@ -11,6 +11,10 @@ export const ZIP_STORED = 0
 export const ZIP_DEFLATED = 8
 
 const ZIP_SOURCE_PREFIX = 'zip-entry:'
+const DEFAULT_MAX_ZIP_CACHE_BYTES = 6 * 1024 * 1024 * 1024
+const DEFAULT_MIN_FREE_BYTES = 8 * 1024 * 1024 * 1024
+const DEFAULT_ZIP_ENTRY_CACHE_MAX = 32
+const MIN_ZIP_CACHE_PRUNE_AGE_MS = 30 * 60 * 1000
 const enc = {
   encode: (p: string) => Buffer.from(p, 'utf8').toString('base64url'),
   decode: (b: string) => Buffer.from(b, 'base64url').toString('utf8'),
@@ -33,6 +37,22 @@ type ZipEntryCache = {
 
 const zipEntryCache = new Map<string, ZipEntryCache>()
 const extractionRequests = new Map<string, Promise<string>>()
+
+function maxZipEntryCacheEntries() {
+  const raw = Number.parseInt(process.env.WSI_HIVE_MAX_ZIP_ENTRY_CACHE_ENTRIES || '', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_ZIP_ENTRY_CACHE_MAX
+}
+
+function pruneZipEntryCache() {
+  const maxEntries = maxZipEntryCacheEntries()
+  while (zipEntryCache.size > maxEntries) {
+    const oldest = zipEntryCache.keys().next().value
+    if (!oldest) {
+      break
+    }
+    zipEntryCache.delete(oldest)
+  }
+}
 
 export function makeZipEntrySource(zipPath: string, entryName: string): string {
   return `${ZIP_SOURCE_PREFIX}${enc.encode(zipPath)}:${enc.encode(entryName)}`
@@ -68,7 +88,12 @@ export async function listZipEntries(zipPath: string): Promise<ZipEntryInfo[]> {
   const zipStat = await stat(zipPath)
   const cached = zipEntryCache.get(zipPath)
   if (cached && cached.size === zipStat.size && cached.mtimeMs === zipStat.mtimeMs) {
+    zipEntryCache.delete(zipPath)
+    zipEntryCache.set(zipPath, cached)
     return cached.entries
+  }
+  if (cached) {
+    zipEntryCache.delete(zipPath)
   }
 
   const zipfile = await openZip(zipPath)
@@ -101,6 +126,7 @@ export async function listZipEntries(zipPath: string): Promise<ZipEntryInfo[]> {
     mtimeMs: zipStat.mtimeMs,
     entries,
   })
+  pruneZipEntryCache()
   return entries
 }
 
@@ -287,11 +313,79 @@ function zipCachePath(cacheRoot: string, zipPath: string, entryName: string, inf
   return join(cacheRoot, 'zip-cache', `${digest}${ext}`)
 }
 
+function maxZipCacheBytes() {
+  const raw = Number.parseInt(process.env.WSI_HIVE_MAX_ZIP_CACHE_BYTES || '', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_ZIP_CACHE_BYTES
+}
+
+function minFreeBytes() {
+  const raw = Number.parseInt(process.env.WSI_HIVE_MIN_FREE_BYTES || '', 10)
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_MIN_FREE_BYTES
+}
+
+async function availableBytes(path: string): Promise<number | null> {
+  const fsStats = await statfs(path).catch(() => null)
+  if (!fsStats) {
+    return null
+  }
+  return Number(fsStats.bavail) * Number(fsStats.bsize)
+}
+
+async function touchCacheFile(path: string) {
+  const now = new Date()
+  await utimes(path, now, now).catch(() => undefined)
+}
+
+async function pruneZipCache(cacheRoot: string, keepPath: string) {
+  const maxBytes = maxZipCacheBytes()
+  const minFree = minFreeBytes()
+  const dir = join(cacheRoot, 'zip-cache')
+  const names = await readdir(dir).catch(() => [])
+  const entries: Array<{ path: string, size: number, mtimeMs: number }> = []
+  const oldestPrunableMtime = Date.now() - MIN_ZIP_CACHE_PRUNE_AGE_MS
+  let free = await availableBytes(cacheRoot)
+  let total = 0
+
+  for (const name of names) {
+    if (name.endsWith('.tmp')) {
+      continue
+    }
+    const path = join(dir, name)
+    const st = await stat(path).catch(() => null)
+    if (!st?.isFile()) {
+      continue
+    }
+    total += st.size
+    if (path !== keepPath) {
+      if (st.mtimeMs <= oldestPrunableMtime) {
+        entries.push({ path, size: st.size, mtimeMs: st.mtimeMs })
+      }
+    }
+  }
+
+  entries.sort((a, b) => a.mtimeMs - b.mtimeMs)
+  for (const entry of entries) {
+    if (total <= maxBytes && (free === null || free >= minFree)) {
+      break
+    }
+    await unlink(entry.path)
+      .then(() => {
+        total -= entry.size
+        if (free !== null) {
+          free += entry.size
+        }
+      })
+      .catch(() => undefined)
+  }
+}
+
 async function extractZipEntryToCache(zipPath: string, entryName: string, cacheRoot: string, info: ZipEntryInfo) {
   const zipStat = await stat(zipPath)
   const target = zipCachePath(cacheRoot, zipPath, entryName, info, `${zipStat.size}:${zipStat.mtimeMs}`)
   const existing = await stat(target).catch(() => null)
   if (existing?.isFile() && existing.size === info.uncompressedSize) {
+    await touchCacheFile(target)
+    await pruneZipCache(cacheRoot, target)
     return target
   }
 
@@ -313,6 +407,7 @@ async function extractZipEntryToCache(zipPath: string, entryName: string, cacheR
       }
       await unlink(target).catch(() => undefined)
       await rename(tmp, target)
+      await pruneZipCache(cacheRoot, target)
       return target
     } catch (err) {
       await unlink(tmp).catch(() => undefined)

@@ -10,6 +10,17 @@ type Props = {
 }
 
 const osdImagePrefixUrl = `${import.meta.env.BASE_URL || './'}osd/images/`
+const isElectrobun = import.meta.env.VITE_ELECTROBUN === '1'
+const animationTime = isElectrobun ? 0.08 : 0.15
+const blendTime = isElectrobun ? 0 : 0.05
+const imageLoaderLimit = isElectrobun ? 2 : 5
+const maxImageCacheCount = isElectrobun ? 64 : 300
+const maxTilesPerFrame = isElectrobun ? 2 : 1
+const maxZoomPixelRatio = isElectrobun ? 1.75 : 4
+const minScrollDeltaTime = isElectrobun ? 70 : 50
+const smoothTileEdgesMinZoom = isElectrobun ? Infinity : 1.1
+const springStiffness = isElectrobun ? 9 : 6.5
+const tileTimeout = 1000 * 1000
 
 /**
  * OpenSeadragon + OpenSlide WASM. Destroys previous viewer on URL change.
@@ -17,28 +28,50 @@ const osdImagePrefixUrl = `${import.meta.env.BASE_URL || './'}osd/images/`
 export function WsiOsdView({ wsiUrl, className, onError }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<ReturnType<typeof OpenSeadragon> | null>(null)
+  const tileSourceRef = useRef<{ destroy?: () => void } | null>(null)
   const slideRef = useRef<unknown>(null)
+  const teardownRef = useRef<Promise<void>>(Promise.resolve())
   const [ready, setReady] = useState(false)
   const [showLoader, setShowLoader] = useState(false)
   const [loadProgress, setLoadProgress] = useState(0)
 
   const destroy = useCallback(() => {
+    const cleanup: Array<Promise<unknown>> = []
     if (viewerRef.current) {
+      const viewer = viewerRef.current as ReturnType<typeof OpenSeadragon> & {
+        close?: () => void
+        tileCache?: { clear?: () => void }
+      }
+      viewerRef.current = null
       try {
-        viewerRef.current.destroy()
+        viewer.close?.()
+        viewer.tileCache?.clear?.()
+        viewer.destroy()
       } catch {
         /* */
       }
-      viewerRef.current = null
     }
+    if (tileSourceRef.current && typeof tileSourceRef.current.destroy === 'function') {
+      try {
+        cleanup.push(Promise.resolve(tileSourceRef.current.destroy()))
+      } catch {
+        /* */
+      }
+    }
+    tileSourceRef.current = null
     if (slideRef.current && typeof (slideRef.current as { destroy?: () => void }).destroy === 'function') {
       try {
-        ;(slideRef.current as { destroy: () => void }).destroy()
+        cleanup.push(Promise.resolve((slideRef.current as { destroy: () => void }).destroy()))
       } catch {
         /* */
       }
     }
     slideRef.current = null
+    teardownRef.current = teardownRef.current
+      .catch(() => undefined)
+      .then(() => Promise.allSettled(cleanup))
+      .then(() => undefined)
+    return teardownRef.current
   }, [])
 
   useEffect(() => {
@@ -56,29 +89,35 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
     setLoadProgress(0)
     ;(async () => {
       try {
-        destroy()
+        await destroy()
         if (!ref.current) {
           return
         }
         ref.current.style.background = '#ffffff'
         const { slide, tileSource } = await buildOpenSlideOpenSeadragonTileSource(wsiUrl)
         if (cancelled) {
+          tileSource.destroy?.()
           slide.destroy?.()
           return
         }
         slideRef.current = slide
+        tileSourceRef.current = tileSource
         const v = OpenSeadragon({
           element: ref.current!,
-          animationTime: 0.15,
-          blendTime: 0.05,
+          animationTime,
+          blendTime,
           constrainDuringPan: true,
           drawer: 'canvas',
-          imageLoaderLimit: 5,
+          imageLoaderLimit,
           immediateRender: true,
-          maxImageCacheCount: 300,
+          maxImageCacheCount,
+          maxTilesPerFrame,
           minZoomImageRatio: 0.1,
-          maxZoomPixelRatio: 4,
-          timeout: 1000 * 1000,
+          minScrollDeltaTime,
+          maxZoomPixelRatio,
+          smoothTileEdgesMinZoom,
+          springStiffness,
+          timeout: tileTimeout,
           showNavigationControl: false,
           placeholderFillStyle: '#ffffff',
           prefixUrl: osdImagePrefixUrl,
@@ -118,7 +157,7 @@ export function WsiOsdView({ wsiUrl, className, onError }: Props) {
       if (finishId) {
         window.clearTimeout(finishId)
       }
-      destroy()
+      void destroy()
     }
   }, [wsiUrl, destroy, onError])
 
